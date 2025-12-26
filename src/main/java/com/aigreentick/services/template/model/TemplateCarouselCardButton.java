@@ -17,7 +17,8 @@ public class TemplateCarouselCardButton {
     @Column(name = "card_id")
     private Long cardId;
 
-    private Integer index;
+    @Column(name = "card_button_index")
+    private Integer cardButtonIndex; //new 
 
     private String type; // // quick_reply, url, phone_number
 

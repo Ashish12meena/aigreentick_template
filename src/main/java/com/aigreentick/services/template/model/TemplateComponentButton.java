@@ -46,7 +46,7 @@ public class TemplateComponentButton {
      * Index of the button within the component (used for ordering).
      */
     @Column(name = "button_index")
-    private int buttonIndex; // new
+    private Integer buttonIndex; // new
 
     /**
      * Autofill text to pre-fill in the message for QUICK_REPLY buttons.
