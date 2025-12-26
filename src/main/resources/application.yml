@@ -1,0 +1,8 @@
+spring:
+  profiles:
+    active: dev
+  application:
+    name: template
+  
+  jackson:
+    property-naming-strategy: SNAKE_CASE
