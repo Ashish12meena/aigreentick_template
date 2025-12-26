@@ -45,7 +45,8 @@ public class TemplateComponentButton {
     /**
      * Index of the button within the component (used for ordering).
      */
-    private int index; // new
+    @Column(name = "button_index")
+    private int buttonIndex; // new
 
     /**
      * Autofill text to pre-fill in the message for QUICK_REPLY buttons.
@@ -56,7 +57,7 @@ public class TemplateComponentButton {
     List<String> example;// new
 
     @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<SupportedApp> supportedApps;
+    private List<SupportedApp> supportedApps;  //new 
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
