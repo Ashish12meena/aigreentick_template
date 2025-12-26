@@ -16,7 +16,6 @@ public class TemplateComponentButton {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    
 
     @Column(name = "template_id")
     private Long templateId;
@@ -34,6 +33,7 @@ public class TemplateComponentButton {
      * Type of OTP (if button type is OTP). Can be null for other button types.
      */
     @Column(name = "otp_type")
+    @Enumerated(EnumType.STRING)
     private OtpTypes otpType; // new
 
     private String number;
@@ -56,8 +56,8 @@ public class TemplateComponentButton {
 
     List<String> example;// new
 
-    @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
-    private List<SupportedApp> supportedApps;  //new 
+    @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
+    private List<SupportedApp> supportedApps; // new
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

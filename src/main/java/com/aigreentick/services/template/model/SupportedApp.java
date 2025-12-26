@@ -2,6 +2,7 @@ package com.aigreentick.services.template.model;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -22,9 +23,9 @@ public class SupportedApp {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne // ✅ Now you need this
-    @JoinColumn(name = "button_id")
-    private TemplateComponentButton button;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "button_id", nullable = false)
+    private TemplateComponentButton button; // new
 
     @Column(name = "package_name")
     private String packageName;
