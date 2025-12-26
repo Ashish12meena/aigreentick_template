@@ -16,6 +16,7 @@ public class TemplateComponentButton {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+    
 
     @Column(name = "template_id")
     private Long templateId;
@@ -29,12 +30,11 @@ public class TemplateComponentButton {
      */
     private String type;
 
-
     /**
      * Type of OTP (if button type is OTP). Can be null for other button types.
      */
     @Column(name = "otp_type")
-    private OtpTypes otpType; //new 
+    private OtpTypes otpType; // new
 
     private String number;
 
@@ -42,21 +42,21 @@ public class TemplateComponentButton {
 
     private String url;
 
-     /**
+    /**
      * Index of the button within the component (used for ordering).
      */
-    private int index; // new 
+    private int index; // new
 
     /**
      * Autofill text to pre-fill in the message for QUICK_REPLY buttons.
      */
     @Column(name = "autofill_text")
-    private String autofillText; //new 
+    private String autofillText; // new
 
-    List<String> example;// new 
-    
-    @Column(columnDefinition = "json",name = "supported_apps")
-    List<SupportedApp> supportedApps;  // new
+    List<String> example;// new
+
+    @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SupportedApp> supportedApps;
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;

@@ -19,16 +19,12 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: validate
-    show-sql: false
+      ddl-auto: update  # ← THIS IS WHAT YOU NEED
+    show-sql: false  # Set to true to see SQL
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
-        jdbc:
-          batch_size: 50
-        order_inserts: true
-        order_updates: true
 
 
 # ---------------- WhatsApp Service ----------------

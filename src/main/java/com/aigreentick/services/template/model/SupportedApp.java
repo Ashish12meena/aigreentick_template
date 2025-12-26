@@ -1,6 +1,13 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.Column;
+import jakarta.persistence.Entity;
+import jakarta.persistence.GeneratedValue;
+import jakarta.persistence.GenerationType;
+import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.ManyToOne;
+import jakarta.persistence.Table;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -8,7 +15,16 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
+@Entity
+@Table(name = "supported_apps")
 public class SupportedApp {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    @ManyToOne // ✅ Now you need this
+    @JoinColumn(name = "button_id")
+    private TemplateComponentButton button;
 
     @Column(name = "package_name")
     private String packageName;
@@ -16,4 +32,3 @@ public class SupportedApp {
     @Column(name = "signature_hash")
     private String signatureHash;
 }
-
