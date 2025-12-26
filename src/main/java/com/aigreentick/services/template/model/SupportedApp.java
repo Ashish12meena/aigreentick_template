@@ -15,6 +15,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+// important note:- it need ids to be bigint ussigned but it create them as signed so table of this should be created by mysql script
+
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
@@ -26,12 +28,8 @@ public class SupportedApp {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(
-        name = "button_id", 
-        nullable = false,
-        columnDefinition = "BIGINT" // ✅ Forces BIGINT type
-    )
-    private TemplateComponentButton button;
+    @JoinColumn(name = "button_id", nullable = false)
+    private TemplateComponentButton button; // new 
 
     @Column(name = "package_name")
     private String packageName;
