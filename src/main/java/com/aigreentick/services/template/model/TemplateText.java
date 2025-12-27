@@ -21,6 +21,8 @@ public class TemplateText {
 
     private String text;
 
+    private Boolean isCarousel;
+
     @Column(name = "default_value")
     private String defaultValue;
 
