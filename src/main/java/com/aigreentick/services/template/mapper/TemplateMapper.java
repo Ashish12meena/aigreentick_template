@@ -102,8 +102,7 @@ public class TemplateMapper {
                 .url(req.getUrl())
                 .buttonIndex(req.getIndex())
                 .autofillText(req.getAutofillText())
-                // .exampleValues(req.getExample() != null ? String.join(",", req.getExample())
-                // : null)
+                .example(req.getExample())
                 .build();
 
         // Map supported apps
@@ -160,7 +159,6 @@ public class TemplateMapper {
                 .url(req.getUrl())
                 .phoneNumber(req.getPhoneNumber())
                 .cardButtonIndex(req.getIndex())
-                .parameters(req.getExample() != null ? String.join(",", req.getExample()) : null)
                 .build();
     }
 

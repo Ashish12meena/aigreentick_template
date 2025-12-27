@@ -2,8 +2,7 @@ package com.aigreentick.services.template.dto.request;
 
 import java.util.List;
 
-import org.hibernate.type.ComponentType;
-
+import com.aigreentick.services.template.enums.ComponentType;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import lombok.Data;
