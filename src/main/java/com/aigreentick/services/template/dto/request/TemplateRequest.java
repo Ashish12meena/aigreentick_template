@@ -3,9 +3,12 @@ package com.aigreentick.services.template.dto.request;
 import java.util.List;
 
 import com.aigreentick.services.template.enums.TemplateStatus;
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Data;
 
 @Data
+@JsonInclude(JsonInclude.Include.NON_NULL) 
 public class TemplateRequest {
      private String name;
 

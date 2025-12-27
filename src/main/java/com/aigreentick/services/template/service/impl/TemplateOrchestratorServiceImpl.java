@@ -15,9 +15,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import tools.jackson.databind.ObjectMapper;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
-
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -26,38 +23,38 @@ public class TemplateOrchestratorServiceImpl {
     private final TemplateMapper templateMapper;
     private final WhatsappClientImpl whatsappClientImpl;
     private final UserService userService;
-    private final ObjectMapper objectMapper;
 
     public TemplateResponseDto createTemplate(CreateTemplateResponseDto request) {
         log.info("Creating template for userId: {}", request.getTemplate().getUserId());
 
-        // Extract the template details and check if not duplicate
         TemplateRequest templateRequest = request.getTemplate();
-        templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), request.getTemplate().getUserId());
+        
+        // Check for duplicate
+        templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), templateRequest.getUserId());
 
         // Fetch WABA credentials
-        AccessTokenCredentials accessTokenCredentials = userService.getWabaAccessToken();
+        AccessTokenCredentials credentials = userService.getWabaAccessToken();
 
         // Serialize template request
         String jsonRequest = serializeTemplate(templateRequest);
-
+        
+        // Map and save template
         Template template = templateMapper.mapToEntity(request);
-
+        template.setWaId(credentials.getWabaId());
+        template.setPayload(jsonRequest);
+        
         templateServiceImpl.save(template);
 
         return templateMapper.mapToTemplateResponse(template);
-
     }
 
     private String serializeTemplate(TemplateRequest request) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
-            return mapper.writeValueAsString(request);
-        } catch (JsonProcessingException e) {
-            log.error("Failed to serialize template request", e);
-            throw new RuntimeException("Template serialization failed", e);
+             ObjectMapper mapper = new ObjectMapper();
+             return mapper.writeValueAsString(request);
+        } catch (Exception e) {
+            log.error("Failed to serialize object to JSON");
+            throw new IllegalStateException("JSON serialization failed",e);
         }
     }
-
 }

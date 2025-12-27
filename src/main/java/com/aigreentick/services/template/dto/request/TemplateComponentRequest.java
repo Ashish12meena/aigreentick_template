@@ -4,10 +4,13 @@ import java.util.List;
 
 import org.hibernate.type.ComponentType;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+
 import lombok.Data;
 
 
 @Data
+@JsonInclude(JsonInclude.Include.NON_NULL) 
 public class TemplateComponentRequest {
     /**
      * Type of the component.
