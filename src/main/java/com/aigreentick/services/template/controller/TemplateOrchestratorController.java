@@ -29,8 +29,7 @@ public class TemplateOrchestratorController {
 
         log.info("Creating template ");
 
-        TemplateResponseDto response = templateOrchestratorServiceImpl.createTemplate(
-                request);
+        TemplateResponseDto response = templateOrchestratorServiceImpl.createTemplate(request);
 
         return ResponseEntity
                 .ok(new ResponseMessage<>(ResponseStatus.SUCCESS.name(), TemplateConstants.Messages.TEMPLATE_CREATED,

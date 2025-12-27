@@ -6,6 +6,7 @@ import org.springframework.stereotype.Repository;
 import com.aigreentick.services.template.model.Template;
 
 @Repository
-public interface TemplateRepository extends JpaRepository<Template,Long>{
+public interface TemplateRepository extends JpaRepository<Template, Long> {
     
+    boolean existsByNameAndUserIdAndDeletedAtIsNull(String name, Long userId);
 }

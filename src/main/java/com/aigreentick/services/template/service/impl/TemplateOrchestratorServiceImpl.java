@@ -28,7 +28,7 @@ public class TemplateOrchestratorServiceImpl {
     private final UserService userService;
     private final ObjectMapper objectMapper;
 
-    public TemplateResponseDto createTemaplate(CreateTemplateResponseDto request) {
+    public TemplateResponseDto createTemplate(CreateTemplateResponseDto request) {
         log.info("Creating template for userId: {}", request.getTemplate().getUserId());
 
         // Extract the template details and check if not duplicate
@@ -38,17 +38,26 @@ public class TemplateOrchestratorServiceImpl {
         // Fetch WABA credentials
         AccessTokenCredentials accessTokenCredentials = userService.getWabaAccessToken();
 
-        // Serialize the template request to JSON
-        String jsonRequest = new ObjectMapper()
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                .writeValueAsString(templateRequest);
+        // Serialize template request
+        String jsonRequest = serializeTemplate(templateRequest);
 
-        Template template = templateMapper.maptoEntity(request);
+        Template template = templateMapper.mapToEntity(request);
 
         templateServiceImpl.save(template);
 
         return templateMapper.mapToTemplateResponse(template);
 
+    }
+
+    private String serializeTemplate(TemplateRequest request) {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            mapper.setSerializationInclusion(JsonInclude.Include.NON_NULL);
+            return mapper.writeValueAsString(request);
+        } catch (JsonProcessingException e) {
+            log.error("Failed to serialize template request", e);
+            throw new RuntimeException("Template serialization failed", e);
+        }
     }
 
 }
