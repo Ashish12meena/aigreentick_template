@@ -62,7 +62,8 @@ public class TemplateMapper {
             }
         }
 
-        throw new UnsupportedOperationException("Unimplemented method 'toTemplateEntity'");
+        return template;
+
     }
 
     private TemplateComponent toComponent(TemplateComponentRequest req) {

@@ -20,11 +20,11 @@ import com.aigreentick.services.template.dto.response.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.UploadMediaResponse;
 import com.aigreentick.services.template.dto.response.UploadOffsetResponse;
 import com.aigreentick.services.template.dto.response.UploadSessionResponse;
+import com.fasterxml.jackson.databind.JsonNode;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import reactor.core.publisher.Mono;
-import tools.jackson.databind.JsonNode;
 
 @RequiredArgsConstructor
 @Slf4j

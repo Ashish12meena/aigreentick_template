@@ -11,11 +11,13 @@ import com.aigreentick.services.template.dto.response.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.mapper.TemplateMapper;
 import com.aigreentick.services.template.model.Template;
+import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import tools.jackson.databind.JsonNode;
-import tools.jackson.databind.ObjectMapper;
+
 
 @Service
 @Slf4j
@@ -83,7 +85,9 @@ public class TemplateOrchestratorServiceImpl {
     private String serializeToString(JsonNode jsonData) {
          try {
             ObjectMapper mapper = new ObjectMapper();
-            return mapper.writeValueAsString(jsonData);
+            return mapper
+            .setSerializationInclusion(Include.NON_NULL)
+            .writeValueAsString(jsonData);
         } catch (Exception e) {
             log.error("Failed to serialize object to JSON");
             throw new IllegalStateException("JSON serialization failed", e);
@@ -93,7 +97,9 @@ public class TemplateOrchestratorServiceImpl {
     private String serializeTemplate(TemplateRequest request) {
         try {
             ObjectMapper mapper = new ObjectMapper();
-            return mapper.writeValueAsString(request);
+            return mapper
+            .setSerializationInclusion(Include.NON_NULL)
+            .writeValueAsString(request);
         } catch (Exception e) {
             log.error("Failed to serialize object to JSON");
             throw new IllegalStateException("JSON serialization failed", e);

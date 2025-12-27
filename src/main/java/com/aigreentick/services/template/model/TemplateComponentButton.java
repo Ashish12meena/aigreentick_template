@@ -1,9 +1,10 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.ToString;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -15,11 +16,12 @@ import com.aigreentick.services.template.enums.OtpTypes;
 @Table(name = "template_component_buttons")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TemplateComponentButton {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
-    @Column(columnDefinition = "BIGINT UNSIGNED")
     private Long id;
 
     @Column(name = "template_id")
@@ -27,7 +29,6 @@ public class TemplateComponentButton {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id", nullable = false)
-    @ToString.Exclude
     private TemplateComponent component;
 
     /**

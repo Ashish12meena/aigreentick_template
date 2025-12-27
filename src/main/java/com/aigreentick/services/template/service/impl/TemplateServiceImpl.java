@@ -6,6 +6,7 @@ import com.aigreentick.services.template.constants.TemplateConstants;
 import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.repository.TemplateRepository;
 
+import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -15,6 +16,7 @@ import lombok.extern.slf4j.Slf4j;
 public class TemplateServiceImpl {
     private final TemplateRepository templateRepository;
 
+    @Transactional
     public void save(Template template) {
         log.info("Saving template: {}", template.getName());
         templateRepository.save(template);

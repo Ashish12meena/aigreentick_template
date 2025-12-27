@@ -1,7 +1,10 @@
 package com.aigreentick.services.template.client.adapter;
 
+import org.springframework.stereotype.Component;
+
 import com.aigreentick.services.template.dto.response.AccessTokenCredentials;
 
+@Component
 public class UserService {
 
     public AccessTokenCredentials getWabaAccessToken() {

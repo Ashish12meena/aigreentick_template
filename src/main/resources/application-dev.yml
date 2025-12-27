@@ -19,7 +19,7 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update  # ← THIS IS WHAT YOU NEED
+      ddl-auto: validate  # ← THIS IS WHAT YOU NEED
     show-sql: false  # Set to true to see SQL
     properties:
       hibernate:

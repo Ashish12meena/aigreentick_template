@@ -1,9 +1,10 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
-import lombok.ToString;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -11,15 +12,16 @@ import java.time.LocalDateTime;
 @Table(name = "template_texts")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TemplateText {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-      @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "template_id", nullable = false)
-    @ToString.Exclude
     private Template template;
 
      private String type; //new 

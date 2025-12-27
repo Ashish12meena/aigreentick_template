@@ -1,8 +1,10 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
@@ -10,6 +12,8 @@ import java.time.LocalDateTime;
 @Table(name = "template_carousel_card_buttons")
 @Data
 @Builder
+@NoArgsConstructor
+@AllArgsConstructor
 public class TemplateCarouselCardButton {
 
     @Id
