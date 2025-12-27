@@ -17,4 +17,9 @@ public class TemplateServiceImpl {
     public void save(Template template) {
         templateRepository.save(template);
     }
+
+    public void checkDuplicateTemplate(String name, Long userId) {
+        // TODO Auto-generated method stub
+        throw new UnsupportedOperationException("Unimplemented method 'checkDuplicateTemplate'");
+    }
 }

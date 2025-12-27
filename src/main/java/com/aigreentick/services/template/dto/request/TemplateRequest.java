@@ -29,5 +29,7 @@ public class TemplateRequest {
 
     private String response;
 
+    private Long userId;
+
     private String componentsJson;
 }
