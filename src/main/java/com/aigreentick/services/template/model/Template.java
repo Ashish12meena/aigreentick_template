@@ -2,16 +2,21 @@ package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "templates")
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
+@Builder
 public class Template {
 
     @Id
@@ -39,6 +44,18 @@ public class Template {
 
     private String response;
 
+    // ==================== RELATIONSHIPS ====================
+
+    @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @ToString.Exclude
+    private List<TemplateComponent> components = new ArrayList<>();
+
+    @OneToMany(mappedBy = "template", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
+    @ToString.Exclude
+    private List<TemplateText> texts = new ArrayList<>();
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -50,4 +67,27 @@ public class Template {
 
     @Column(name = "template_type")
     private String templateType;
+
+      // ==================== HELPER METHODS ====================
+
+    public void addComponent(TemplateComponent component) {
+        components.add(component);
+        component.setTemplate(this);
+    }
+
+    public void removeComponent(TemplateComponent component) {
+        components.remove(component);
+        component.setTemplate(null);
+    }
+
+    public void addText(TemplateText text) {
+        texts.add(text);
+        text.setTemplate(this);
+    }
+
+    public void removeText(TemplateText text) {
+        texts.remove(text); 
+        text.setTemplate(null);
+    }
+
 }

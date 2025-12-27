@@ -1,21 +1,26 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "template_texts")
 @Data
+@Builder
 public class TemplateText {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "component_id")
-    private Long componentId;
+      @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "template_id", nullable = false)
+    @ToString.Exclude
+    private Template template;
 
      private String type; //new 
 

@@ -1,9 +1,12 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 import com.aigreentick.services.template.enums.OtpTypes;
@@ -11,6 +14,7 @@ import com.aigreentick.services.template.enums.OtpTypes;
 @Entity
 @Table(name = "template_component_buttons")
 @Data
+@Builder
 public class TemplateComponentButton {
 
     @Id
@@ -21,8 +25,10 @@ public class TemplateComponentButton {
     @Column(name = "template_id")
     private Long templateId;
 
-    @Column(name = "component_id")
-    private Integer componentId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "component_id", nullable = false)
+    @ToString.Exclude
+    private TemplateComponent component;
 
     /**
      * Type of the button.
@@ -57,8 +63,8 @@ public class TemplateComponentButton {
 
     List<String> example;// new
 
-    @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
-    private List<SupportedApp> supportedApps; // new
+    @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<SupportedApp> supportedApps = new ArrayList<>(); // new
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -68,4 +74,16 @@ public class TemplateComponentButton {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    // ==================== HELPER METHODS ====================
+
+    public void addSupportedApp(SupportedApp app) {
+        supportedApps.add(app);
+        app.setButton(this);
+    }
+
+    public void removeSupportedApp(SupportedApp app) {
+        supportedApps.remove(app);
+        app.setButton(null);
+    }
 }

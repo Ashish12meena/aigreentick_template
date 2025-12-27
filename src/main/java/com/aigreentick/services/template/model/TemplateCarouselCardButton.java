@@ -1,6 +1,7 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -8,17 +9,19 @@ import java.time.LocalDateTime;
 @Entity
 @Table(name = "template_carousel_card_buttons")
 @Data
+@Builder
 public class TemplateCarouselCardButton {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "card_id")
-    private Long cardId;
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "card_id", nullable = false)
+    private TemplateCarouselCard card;
 
     @Column(name = "card_button_index")
-    private Integer cardButtonIndex; //new 
+    private Integer cardButtonIndex; // new
 
     private String type; // // quick_reply, url, phone_number
 

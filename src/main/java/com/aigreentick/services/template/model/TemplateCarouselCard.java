@@ -1,13 +1,18 @@
 package com.aigreentick.services.template.model;
 
 import jakarta.persistence.*;
+import lombok.Builder;
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "template_carousel_cards")
 @Data
+@Builder
 public class TemplateCarouselCard {
 
     @Id
@@ -17,8 +22,9 @@ public class TemplateCarouselCard {
     @Column(name = "template_id")
     private Long templateId;
 
-    @Column(name = "component_id")
-    private Long componentId;
+     @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "component_id", nullable = false)
+    private TemplateComponent component;
 
     private String header;
 
@@ -35,6 +41,12 @@ public class TemplateCarouselCard {
 
     private String parameters;
 
+       // ==================== RELATIONSHIPS ====================
+
+    @OneToMany(mappedBy = "card", cascade = CascadeType.ALL, orphanRemoval = true)
+    @ToString.Exclude
+    private List<TemplateCarouselCardButton> buttons = new ArrayList<>();
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -43,4 +55,17 @@ public class TemplateCarouselCard {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    // ==================== HELPER METHODS ====================
+
+    public void addButton(TemplateCarouselCardButton button) {
+        buttons.add(button);
+        button.setCard(this);
+    }
+
+    public void removeButton(TemplateCarouselCardButton button) {
+        buttons.remove(button);
+        button.setCard(null);
+    }
+
 }
