@@ -9,6 +9,7 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 public class TemplateTextRequest {
     private String type;
+    private boolean isCarousel;
     private Integer textIndex;
     private String text;
 }
