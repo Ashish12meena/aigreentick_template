@@ -1,5 +1,7 @@
 package com.aigreentick.services.template.mapper;
 
+import java.time.LocalDateTime;
+
 import org.springframework.stereotype.Component;
 
 import com.aigreentick.services.template.dto.request.CreateTemplateResponseDto;
@@ -27,25 +29,24 @@ public class TemplateMapper {
         return TemplateResponseDto.builder()
                 .id(template.getId())
                 .name(template.getName())
-                .status(template.getStatus())
                 .category(template.getCategory())
                 .language(template.getLanguage())
                 .build();
     }
 
-    public Template toTemplateEntity(CreateTemplateResponseDto request) {
+    public Template toTemplateEntity(CreateTemplateResponseDto request, Long userId) {
 
         TemplateRequest req = request.getTemplate();
 
         Template template = Template.builder()
-                .userId(req.getUserId())
+                .userId(userId)
                 .name(req.getName())
                 .language(req.getLanguage())
                 .category(req.getCategory())
                 .previousCategory(req.getPreviousCategory())
                 .status(req.getStatus() != null ? req.getStatus().getValue() : "pending")
-                .response(req.getResponse())
-                .payload(req.getComponentsJson())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         // Map components
@@ -74,6 +75,8 @@ public class TemplateMapper {
                 .imageUrl(req.getImageUrl() != null ? req.getImageUrl() : req.getMediaUrl())
                 .addSecurityRecommendation(req.getAddSecurityRecommendation())
                 .codeExpirationMinutes(req.getCodeExpirationMinutes())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         // Map buttons
@@ -103,6 +106,8 @@ public class TemplateMapper {
                 .buttonIndex(req.getIndex())
                 .autofillText(req.getAutofillText())
                 .example(req.getExample())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         // Map supported apps
@@ -118,6 +123,8 @@ public class TemplateMapper {
     private TemplateCarouselCard toCarouselCard(TemplateComponentCardsRequest req) {
         TemplateCarouselCard card = TemplateCarouselCard.builder()
                 .cardIndex(req.getIndex())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
 
         // Extract header/body from card components
@@ -159,6 +166,8 @@ public class TemplateMapper {
                 .url(req.getUrl())
                 .phoneNumber(req.getPhoneNumber())
                 .cardButtonIndex(req.getIndex())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
     }
 
@@ -168,6 +177,8 @@ public class TemplateMapper {
                 .text(req.getText())
                 .isCarousel(req.isCarousel())
                 .textIndex(req.getTextIndex())
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
                 .build();
     }
 

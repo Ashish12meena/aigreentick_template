@@ -48,7 +48,7 @@ public class TemplateCarouselCard {
        // ==================== RELATIONSHIPS ====================
 
     @OneToMany(mappedBy = "card", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude
+    @Builder.Default
     private List<TemplateCarouselCardButton> buttons = new ArrayList<>();
 
     @Column(name = "created_at")

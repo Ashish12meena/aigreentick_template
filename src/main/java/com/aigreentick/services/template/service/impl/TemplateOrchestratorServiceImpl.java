@@ -14,10 +14,10 @@ import com.aigreentick.services.template.model.Template;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
 
 @Service
 @Slf4j
@@ -28,13 +28,13 @@ public class TemplateOrchestratorServiceImpl {
     private final WhatsappClientImpl whatsappClientImpl;
     private final UserService userService;
 
-    public TemplateResponseDto createTemplate(CreateTemplateResponseDto request) {
-        log.info("Creating template for userId: {}", request.getTemplate().getUserId());
+    public TemplateResponseDto createTemplate(CreateTemplateResponseDto request, Long userId) {
+        log.info("Creating template for userId: {}", userId);
 
         TemplateRequest templateRequest = request.getTemplate();
 
         // Check for duplicate
-        templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), templateRequest.getUserId());
+        templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), userId);
 
         // Fetch WABA credentials
         AccessTokenCredentials credentials = userService.getWabaAccessToken();
@@ -52,7 +52,7 @@ public class TemplateOrchestratorServiceImpl {
 
         JsonNode jsonData = fbResponse.getData();
 
-         // Handle Facebook-specific errors
+        // Handle Facebook-specific errors
         if (jsonData.has("error")) {
             String errorMessage = jsonData.path("error").path("message").asText("Unknown error");
             return new TemplateResponseDto(errorMessage, jsonData);
@@ -70,7 +70,7 @@ public class TemplateOrchestratorServiceImpl {
         String data = serializeToString(jsonData);
 
         // Map and save template
-        Template template = templateMapper.toTemplateEntity(request);
+        Template template = templateMapper.toTemplateEntity(request, userId);
         template.setWaId(credentials.getWabaId());
         template.setStatus(status);
         template.setPayload(jsonRequest);
@@ -83,11 +83,11 @@ public class TemplateOrchestratorServiceImpl {
     }
 
     private String serializeToString(JsonNode jsonData) {
-         try {
+        try {
             ObjectMapper mapper = new ObjectMapper();
             return mapper
-            .setSerializationInclusion(Include.NON_NULL)
-            .writeValueAsString(jsonData);
+                    .setSerializationInclusion(Include.NON_NULL)
+                    .writeValueAsString(jsonData);
         } catch (Exception e) {
             log.error("Failed to serialize object to JSON");
             throw new IllegalStateException("JSON serialization failed", e);
@@ -96,13 +96,16 @@ public class TemplateOrchestratorServiceImpl {
 
     private String serializeTemplate(TemplateRequest request) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            return mapper
-            .setSerializationInclusion(Include.NON_NULL)
-            .writeValueAsString(request);
+            ObjectMapper mapper = new ObjectMapper()
+                    .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE) // snake_case keys
+                    .setSerializationInclusion(Include.NON_NULL); // ignore nulls
+
+            return mapper.writeValueAsString(request);
+
         } catch (Exception e) {
-            log.error("Failed to serialize object to JSON");
+            log.error("Failed to serialize object to JSON", e);
             throw new IllegalStateException("JSON serialization failed", e);
         }
     }
+
 }

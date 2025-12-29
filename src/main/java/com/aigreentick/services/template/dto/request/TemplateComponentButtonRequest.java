@@ -30,7 +30,7 @@ public class TemplateComponentButtonRequest {
     /**
      * Index of the button within the component (used for ordering).
      */
-    private int index;
+    private Integer index;
 
     /**
      * URL for URL type buttons. Can be null for other types.

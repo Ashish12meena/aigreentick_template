@@ -51,11 +51,11 @@ public class TemplateComponent {
      // ==================== RELATIONSHIPS ====================
 
     @OneToMany(mappedBy = "component", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude
+    @Builder.Default
     private List<TemplateComponentButton> buttons = new ArrayList<>();
 
     @OneToMany(mappedBy = "component", cascade = CascadeType.ALL, orphanRemoval = true)
-    @ToString.Exclude
+    @Builder.Default
     private List<TemplateCarouselCard> carouselCards = new ArrayList<>();
 
     @Column(name = "created_at")

@@ -65,6 +65,7 @@ public class TemplateComponentButton {
     List<String> example;// new
 
     @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
+    @Builder.Default
     private List<SupportedApp> supportedApps = new ArrayList<>(); // new
 
     @Column(name = "created_at")

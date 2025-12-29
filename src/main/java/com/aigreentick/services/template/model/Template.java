@@ -40,8 +40,11 @@ public class Template {
     @Column(name = "wa_id")
     private String waId;
 
+    @Column(columnDefinition = "TEXT")
     private String payload;
 
+    // Store JSON text or map to JsonNode if needed
+    @Column(columnDefinition = "JSON")
     private String response;
 
     // ==================== RELATIONSHIPS ====================
@@ -68,7 +71,7 @@ public class Template {
     @Column(name = "template_type")
     private String templateType;
 
-      // ==================== HELPER METHODS ====================
+    // ==================== HELPER METHODS ====================
 
     public void addComponent(TemplateComponent component) {
         components.add(component);
@@ -86,7 +89,7 @@ public class Template {
     }
 
     public void removeText(TemplateText text) {
-        texts.remove(text); 
+        texts.remove(text);
         text.setTemplate(null);
     }
 
