@@ -12,10 +12,10 @@ import lombok.NoArgsConstructor;
 @Data
 @AllArgsConstructor
 @NoArgsConstructor
-@JsonInclude(JsonInclude.Include.NON_NULL) 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class TemplateCarouselCardComponentRequest {
-     private String type;
-    private MediaFormat format; 
+    private String type;
+    private MediaFormat format;
     private TemplateCarouselExampleRequest example;
     private String text;
     private List<TemplateCarouselButtonRequest> buttons;

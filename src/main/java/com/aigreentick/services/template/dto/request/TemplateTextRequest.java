@@ -13,6 +13,7 @@ import lombok.NoArgsConstructor;
 public class TemplateTextRequest {
     private String type;
     private boolean isCarousel;
+    private Integer cardIndex;
     private Integer textIndex;
     private String text;
 }

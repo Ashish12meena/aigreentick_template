@@ -24,11 +24,13 @@ public class TemplateText {
     @JoinColumn(name = "template_id", nullable = false)
     private Template template;
 
-     private String type; //new 
+    private String type; // new
 
     private String text;
 
     private Boolean isCarousel;
+
+    private Integer cardIndex;
 
     @Column(name = "default_value")
     private String defaultValue;
