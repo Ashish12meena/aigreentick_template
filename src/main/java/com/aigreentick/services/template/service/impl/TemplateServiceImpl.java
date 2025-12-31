@@ -1,8 +1,12 @@
 package com.aigreentick.services.template.service.impl;
 
+import java.util.List;
+import java.util.Optional;
+
 import org.springframework.stereotype.Service;
 
 import com.aigreentick.services.template.constants.TemplateConstants;
+import com.aigreentick.services.template.dto.response.MetaTemplateIdOnly;
 import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.repository.TemplateRepository;
 
@@ -33,4 +37,10 @@ public class TemplateServiceImpl {
             throw new IllegalArgumentException(errorMsg);
         }
     }
+
+     public List<MetaTemplateIdOnly> findMetaTemplateIdsByUserId(Long userId) {
+        log.debug("Fetching metaTemplateIds for userId: {}", userId);
+        return templateRepository.findMetaTemplateIdsByUserId(userId);
+    }
+
 }
