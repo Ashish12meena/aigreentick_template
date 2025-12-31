@@ -41,6 +41,7 @@ public class TemplateOrchestratorServiceImpl {
     private final ObjectMapper objectMapper;
     private final UserService userService;
 
+
     public TemplateResponseDto createTemplate(CreateTemplateResponseDto request, Long userId) {
         log.info("Creating template for userId: {}", userId);
 
@@ -83,7 +84,7 @@ public class TemplateOrchestratorServiceImpl {
 
         // Map and save template
         Template template = templateMapper.toTemplateEntity(request, userId);
-        template.setWaId(templateId);  // Store the Facebook template ID
+        template.setWaId(templateId); // Store the Facebook template ID
         template.setStatus(status);
         template.setPayload(jsonRequest);
         template.setCategory(category);
@@ -114,7 +115,7 @@ public class TemplateOrchestratorServiceImpl {
                 Optional.empty());
 
         if (!response.isSuccess() || response.getData() == null) {
-            throw new IllegalStateException("Failed to fetch templates from Facebook: " 
+            throw new IllegalStateException("Failed to fetch templates from Facebook: "
                     + response.getErrorMessage());
         }
 
@@ -166,7 +167,7 @@ public class TemplateOrchestratorServiceImpl {
 
     private List<TemplateRequest> convertToTemplateRequestList(JsonNode responseNode) {
         JsonNode dataNode = responseNode.get("data");
-        
+
         if (dataNode == null || !dataNode.isArray()) {
             log.warn("No 'data' array found in Facebook response");
             return List.of();
@@ -179,7 +180,8 @@ public class TemplateOrchestratorServiceImpl {
 
             return mapper.readValue(
                     dataNode.traverse(),
-                    new TypeReference<List<TemplateRequest>>() {});
+                    new TypeReference<List<TemplateRequest>>() {
+                    });
         } catch (IOException e) {
             log.error("Failed to parse Facebook templates response", e);
             throw new RuntimeException("Failed to map Facebook templates", e);
