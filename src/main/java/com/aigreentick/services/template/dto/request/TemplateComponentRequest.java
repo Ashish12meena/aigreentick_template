@@ -3,6 +3,7 @@ package com.aigreentick.services.template.dto.request;
 import java.util.List;
 
 import com.aigreentick.services.template.enums.ComponentType;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import lombok.Data;
@@ -10,6 +11,7 @@ import lombok.Data;
 
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL) 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TemplateComponentRequest {
     /**
      * Type of the component.

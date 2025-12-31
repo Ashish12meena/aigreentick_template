@@ -15,13 +15,13 @@ import com.aigreentick.services.template.dto.request.CreateTemplateResponseDto;
 import com.aigreentick.services.template.dto.request.TemplateRequest;
 import com.aigreentick.services.template.dto.response.AccessTokenCredentials;
 import com.aigreentick.services.template.dto.response.FacebookApiResponse;
-import com.aigreentick.services.template.dto.response.MetaTemplateIdOnly;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.dto.response.TemplateSyncStats;
 import com.aigreentick.services.template.mapper.TemplateMapper;
 import com.aigreentick.services.template.model.Template;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonInclude.Include;
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -76,15 +76,14 @@ public class TemplateOrchestratorServiceImpl {
         String category = jsonData.path("category").asText(null);
 
         if (templateId == null || status == null) {
-            return new TemplateResponseDto(
-                    "Invalid response from Facebook API", jsonData);
+            return new TemplateResponseDto("Invalid response from Facebook API", jsonData);
         }
 
         String data = serializeToString(jsonData);
 
         // Map and save template
         Template template = templateMapper.toTemplateEntity(request, userId);
-        template.setWaId(credentials.getWabaId());
+        template.setWaId(templateId);  // Store the Facebook template ID
         template.setStatus(status);
         template.setPayload(jsonRequest);
         template.setCategory(category);
@@ -95,14 +94,105 @@ public class TemplateOrchestratorServiceImpl {
         return templateMapper.mapToTemplateResponse(template);
     }
 
+    @Transactional
+    public TemplateSyncStats syncTemplatesWithFacebook(Long userId) {
+        log.info("Syncing templates for userId: {}", userId);
+
+        if (userId == null) {
+            throw new IllegalArgumentException("User ID is required");
+        }
+
+        // 1. Fetch WABA access token
+        AccessTokenCredentials credentials = userService.getWabaAccessToken();
+
+        // 2. Call Facebook API to get all templates
+        FacebookApiResponse<JsonNode> response = whatsappClientImpl.getAllTemplates(
+                credentials.getWabaId(),
+                credentials.getAccessToken(),
+                Optional.empty(), Optional.empty(),
+                Optional.empty(), Optional.empty(),
+                Optional.empty());
+
+        if (!response.isSuccess() || response.getData() == null) {
+            throw new IllegalStateException("Failed to fetch templates from Facebook: " 
+                    + response.getErrorMessage());
+        }
+
+        // 3. Convert Facebook API response into DTO list
+        List<TemplateRequest> facebookTemplates = convertToTemplateRequestList(response.getData());
+        log.info("Fetched {} templates from Facebook", facebookTemplates.size());
+
+        // 4. Extract Facebook template IDs (as strings - this is the 'id' from Meta)
+        Set<String> facebookTemplateIds = facebookTemplates.stream()
+                .map(TemplateRequest::getMetaTemplateId)
+                .filter(id -> id != null)
+                .collect(Collectors.toSet());
+
+        // 5. Fetch existing waId values from DB for this user
+        Set<String> existingWaIds = templateServiceImpl.findWaIdsByUserId(userId);
+        log.info("Found {} existing templates in DB for userId: {}", existingWaIds.size(), userId);
+
+        // 6. Determine new templates to insert (in FB but not in DB)
+        Set<String> newIds = new HashSet<>(facebookTemplateIds);
+        newIds.removeAll(existingWaIds);
+        log.info("New templates to insert: {}", newIds.size());
+
+        // 7. Determine stale templates to delete (in DB but not in FB)
+        Set<String> deleteIds = new HashSet<>(existingWaIds);
+        deleteIds.removeAll(facebookTemplateIds);
+        log.info("Stale templates to delete: {}", deleteIds.size());
+
+        // 8. Prepare entities for insertion
+        List<Template> toInsert = facebookTemplates.stream()
+                .filter(dto -> newIds.contains(dto.getMetaTemplateId()))
+                .map(dto -> templateMapper.fromFacebookTemplate(dto, userId, credentials.getWabaId()))
+                .toList();
+
+        // 9. Delete stale templates
+        int deletedCount = 0;
+        if (!deleteIds.isEmpty()) {
+            deletedCount = templateServiceImpl.softDeleteByWaIdInAndUserId(deleteIds, userId);
+            log.info("Deleted {} stale templates", deletedCount);
+        }
+
+        // 10. Insert new templates
+        if (!toInsert.isEmpty()) {
+            templateServiceImpl.saveAll(toInsert);
+            log.info("Inserted {} new templates", toInsert.size());
+        }
+
+        return new TemplateSyncStats(toInsert.size(), deletedCount);
+    }
+
+    private List<TemplateRequest> convertToTemplateRequestList(JsonNode responseNode) {
+        JsonNode dataNode = responseNode.get("data");
+        
+        if (dataNode == null || !dataNode.isArray()) {
+            log.warn("No 'data' array found in Facebook response");
+            return List.of();
+        }
+
+        try {
+            ObjectMapper mapper = objectMapper.copy()
+                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
+                    .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+
+            return mapper.readValue(
+                    dataNode.traverse(),
+                    new TypeReference<List<TemplateRequest>>() {});
+        } catch (IOException e) {
+            log.error("Failed to parse Facebook templates response", e);
+            throw new RuntimeException("Failed to map Facebook templates", e);
+        }
+    }
+
     private String serializeToString(JsonNode jsonData) {
         try {
-            ObjectMapper mapper = new ObjectMapper();
-            return mapper
+            return objectMapper.copy()
                     .setSerializationInclusion(Include.NON_NULL)
                     .writeValueAsString(jsonData);
         } catch (Exception e) {
-            log.error("Failed to serialize object to JSON");
+            log.error("Failed to serialize JsonNode to string", e);
             throw new IllegalStateException("JSON serialization failed", e);
         }
     }
@@ -110,99 +200,13 @@ public class TemplateOrchestratorServiceImpl {
     private String serializeTemplate(TemplateRequest request) {
         try {
             ObjectMapper mapper = new ObjectMapper()
-                    .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE) // snake_case keys
-                    .setSerializationInclusion(Include.NON_NULL); // ignore nulls
+                    .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
+                    .setSerializationInclusion(Include.NON_NULL);
 
             return mapper.writeValueAsString(request);
-
         } catch (Exception e) {
-            log.error("Failed to serialize object to JSON", e);
+            log.error("Failed to serialize template request", e);
             throw new IllegalStateException("JSON serialization failed", e);
         }
     }
-
-    @Transactional
-    public TemplateSyncStats syncTemplatesWithFacebook(Long userId) {
-        log.info("Syncing templates for userId: {}", userId);
-
-        if (userId == null) {
-            throw new IllegalArgumentException("Project ID is required");
-        }
-
-        // 1. Fetch WABA access token
-        AccessTokenCredentials accessTokenCredentials = userService.getWabaAccessToken();
-
-        // 2. Call Facebook API to get all templates
-        FacebookApiResponse<JsonNode> response = whatsappClientImpl.getAllTemplates(
-                accessTokenCredentials.getWabaId(),
-                accessTokenCredentials.getAccessToken(),
-                Optional.empty(), Optional.empty(),
-                Optional.empty(), Optional.empty(),
-                Optional.empty());
-
-        if (response.getStatusCode() != 200 || response.getData() == null) {
-            throw new IllegalStateException("Failed to fetch templates from Facebook");
-        }
-
-        // Convert Facebook API response into DTO list
-        List<TemplateRequest> facebookTemplates = convertToBaseTemplateRequestDtoList(response.getData());
-
-        // 3. Extract Facebook template IDs only
-        Set<Long> facebookTemplateIds = facebookTemplates.stream()
-                .map(TemplateRequest::getId)
-                .collect(Collectors.toSet());
-
-        // 4. Fetch existing template IDs from DB for this project
-        List<String> metaTemplateIds = templateServiceImpl.findMetaTemplateIdsByUserId(userId)
-                .stream()
-                .map(MetaTemplateIdOnly::getMetaTemplateId)
-                .toList();
-
-        Set<String> setOfMetaTemplateIds = new HashSet<>(metaTemplateIds);
-
-        // 5. Determine new templates to insert (in FB but not in DB)
-        Set<Long> newIds = new HashSet<>(facebookTemplateIds);
-        newIds.removeAll(setOfMetaTemplateIds);
-
-        // 6. Determine stale templates to delete (in DB but not in FB)
-        Set<Long> deleteIds = new HashSet<>(setOfMetaTemplateIds);
-        deleteIds.removeAll(facebookTemplateIds);
-
-        // 7. Prepare entities for insertion
-        List<Template> toInsert = facebookTemplates.stream()
-                .filter(dto -> newIds.contains(dto.getId()))
-                .map(dto -> templateMapper.toTemplateEntity(dto, userId))
-                .toList();
-
-        // 8. Delete stale templates
-        if (!deleteIds.isEmpty()) {
-            templateServiceImpl.deleteByMetaTemplateIdInAndUserId(deleteIds, userId);
-        }
-
-        // 9. Insert new templates
-        if (!toInsert.isEmpty()) {
-            templateServiceImpl.saveAll(toInsert);
-        }
-
-        // Return statistics
-        return new TemplateSyncStats(toInsert.size(), deleteIds.size());
-    }
-
-    private List<TemplateRequest> convertToBaseTemplateRequestDtoList(JsonNode responseNode) {
-        JsonNode dataNode = responseNode.get("data");
-        List<TemplateRequest> dtos;
-        try {
-            dtos = objectMapper
-                    .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false)
-                    .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                    .readValue(
-                            dataNode.traverse(),
-                            new TypeReference<List<BaseTemplateRequestDto>>() {
-                            });
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to map JsonNode list to BaseTemplateRequestDto list", e);
-        }
-        return dtos;
-    }
-
 }

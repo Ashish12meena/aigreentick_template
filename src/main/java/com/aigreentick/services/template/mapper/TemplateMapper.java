@@ -37,8 +37,38 @@ public class TemplateMapper {
                 .build();
     }
 
-    public Template toTemplateEntity(CreateTemplateResponseDto request, Long userId) {
+    /**
+     * Maps a Facebook API template response to a Template entity.
+     * Used during sync operations.
+     */
+    public Template fromFacebookTemplate(TemplateRequest fbTemplate, Long userId, String wabaId) {
+        Template template = Template.builder()
+                .userId(userId)
+                .name(fbTemplate.getName())
+                .language(fbTemplate.getLanguage())
+                .category(fbTemplate.getCategory())
+                .previousCategory(fbTemplate.getPreviousCategory())
+                .status(fbTemplate.getStatus() != null ? fbTemplate.getStatus().getValue() : null)
+                .waId(fbTemplate.getMetaTemplateId())  // Store Facebook template ID
+                .createdAt(LocalDateTime.now())
+                .updatedAt(LocalDateTime.now())
+                .build();
 
+        // Map components from Facebook response
+        if (fbTemplate.getComponents() != null) {
+            for (TemplateComponentRequest compReq : fbTemplate.getComponents()) {
+                template.addComponent(toComponent(compReq));
+            }
+        }
+
+        return template;
+    }
+
+    /**
+     * Maps CreateTemplateResponseDto to Template entity.
+     * Used during template creation flow.
+     */
+    public Template toTemplateEntity(CreateTemplateResponseDto request, Long userId) {
         TemplateRequest req = request.getTemplate();
 
         Template template = Template.builder()
@@ -47,7 +77,7 @@ public class TemplateMapper {
                 .language(req.getLanguage())
                 .category(req.getCategory())
                 .previousCategory(req.getPreviousCategory())
-                .status(req.getStatus() != null ? req.getStatus().getValue() : "pending")
+                .status(req.getStatus() != null ? req.getStatus().getValue() : "PENDING")
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -67,7 +97,6 @@ public class TemplateMapper {
         }
 
         return template;
-
     }
 
     private TemplateComponent toComponent(TemplateComponentRequest req) {
@@ -93,7 +122,7 @@ public class TemplateMapper {
         if (req.getCards() != null) {
             AtomicInteger cardIndex = new AtomicInteger(0);
             for (TemplateComponentCardsRequest cardReq : req.getCards()) {
-                comp.addCarouselCard(toCarouselCard(cardReq,cardIndex.getAndIncrement()));
+                comp.addCarouselCard(toCarouselCard(cardReq, cardIndex.getAndIncrement()));
             }
         }
 
@@ -124,14 +153,13 @@ public class TemplateMapper {
         return btn;
     }
 
-    private TemplateCarouselCard toCarouselCard(TemplateComponentCardsRequest req,int index) {
+    private TemplateCarouselCard toCarouselCard(TemplateComponentCardsRequest req, int index) {
         TemplateCarouselCard card = TemplateCarouselCard.builder()
                 .cardIndex(index)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        // Extract header/body from card components
         if (req.getComponents() != null) {
             for (TemplateCarouselCardComponentRequest compReq : req.getComponents()) {
                 switch (compReq.getType().toUpperCase()) {
@@ -192,5 +220,4 @@ public class TemplateMapper {
                 .signatureHash(req.getSignatureHash())
                 .build();
     }
-
 }

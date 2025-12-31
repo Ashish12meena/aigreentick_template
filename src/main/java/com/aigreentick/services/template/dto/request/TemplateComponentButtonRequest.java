@@ -4,6 +4,7 @@ import java.util.List;
 
 import com.aigreentick.services.template.enums.ButtonTypes;
 import com.aigreentick.services.template.enums.OtpTypes;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
 import lombok.Data;
@@ -11,6 +12,7 @@ import lombok.Data;
 
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL) 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TemplateComponentButtonRequest {
         /**
      * Type of the button.
