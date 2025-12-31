@@ -28,8 +28,10 @@ public class TemplateText {
 
     private String text;
 
+    @Column(name = "is_carousel")
     private Boolean isCarousel;
-
+    
+    @Column(name = "card_index")
     private Integer cardIndex;
 
     @Column(name = "default_value")

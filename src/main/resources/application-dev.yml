@@ -16,18 +16,25 @@ spring:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-
   jpa:
     hibernate:
-      ddl-auto: validate  # ← THIS IS WHAT YOU NEED
-    show-sql: false  # Set to true to see SQL
+      ddl-auto: validate
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
 
+  servlet:
+    multipart:
+      max-file-size: 100MB        # single file limit
+      max-request-size: 110MB     # total request payload limit (slightly higher)
+      enabled: true               # ensure multipart handling is active
 
 # ---------------- WhatsApp Service ----------------
 whatsapp-service:
   base-url: https://graph.facebook.com
   api-version: v23.0
+
+# duplicate config currently used in @Value injections
+apiVersion: v23.0
