@@ -3,15 +3,17 @@ package com.aigreentick.services.template.dto.request;
 import java.util.List;
 
 import com.aigreentick.services.template.enums.TemplateStatus;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
 import lombok.Data;
 
 @Data
 @JsonInclude(JsonInclude.Include.NON_NULL) 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class TemplateRequest {
-    private Long id;
-    
+
      private String name;
 
     private String category;
@@ -24,6 +26,7 @@ public class TemplateRequest {
 
     private String previousCategory;
 
+    @JsonProperty("id")
     private String metaTemplateId;
 
     private String submissionPayload;

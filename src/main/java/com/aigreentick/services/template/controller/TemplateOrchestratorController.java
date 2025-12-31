@@ -4,7 +4,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,12 +40,11 @@ public class TemplateOrchestratorController {
                         response));
     }
 
-    @GetMapping(TemplateConstants.Paths.SYNC_MY_TEMPLATES)
-    public ResponseEntity<?> syncTemplateWithFacebook(
-            @RequestHeader(value = "X-Project-Id", required = false) String projectIdHeader) {
+    @GetMapping("/sync-my-templates")
+    public ResponseEntity<?> syncTemplateWithFacebook() {
 
         Long userId = 1L;
-        log.info("Syncing templates for projectId: {}", userId);
+        log.info("Syncing templates for userId: {}", userId);
 
         TemplateSyncStats response = templateOrchestratorServiceImpl.syncTemplatesWithFacebook(userId);
 
