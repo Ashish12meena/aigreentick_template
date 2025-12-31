@@ -1,6 +1,7 @@
 package com.aigreentick.services.template.mapper;
 
 import java.time.LocalDateTime;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.stereotype.Component;
 
@@ -29,8 +30,10 @@ public class TemplateMapper {
         return TemplateResponseDto.builder()
                 .id(template.getId())
                 .name(template.getName())
+                .status(template.getStatus())
                 .category(template.getCategory())
                 .language(template.getLanguage())
+                .metaTemplateId(template.getWaId())
                 .build();
     }
 
@@ -88,8 +91,9 @@ public class TemplateMapper {
 
         // Map carousel cards
         if (req.getCards() != null) {
+            AtomicInteger cardIndex = new AtomicInteger(0);
             for (TemplateComponentCardsRequest cardReq : req.getCards()) {
-                comp.addCarouselCard(toCarouselCard(cardReq));
+                comp.addCarouselCard(toCarouselCard(cardReq,cardIndex.getAndIncrement()));
             }
         }
 
@@ -120,9 +124,9 @@ public class TemplateMapper {
         return btn;
     }
 
-    private TemplateCarouselCard toCarouselCard(TemplateComponentCardsRequest req) {
+    private TemplateCarouselCard toCarouselCard(TemplateComponentCardsRequest req,int index) {
         TemplateCarouselCard card = TemplateCarouselCard.builder()
-                .cardIndex(req.getIndex())
+                .cardIndex(index)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
