@@ -2,8 +2,6 @@ package com.aigreentick.services.template.dto.build;
 
 import java.util.List;
 
-import com.aigreentick.services.template.model.SupportedApp;
-
 import lombok.Builder;
 import lombok.Data;
 
@@ -19,5 +17,5 @@ public class TemplateComponentButtonDto {
     private String url;
     private String autofillText;
     List<String> example;
-    List<SupportedApp> supportedApps;
+    List<SupportedAppDto> supportedApps;
 }
