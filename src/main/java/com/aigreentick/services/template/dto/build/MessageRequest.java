@@ -12,7 +12,7 @@ import lombok.NoArgsConstructor;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class MessageTemplate {
+public class MessageRequest {
 
     @Builder.Default
     private String messagingProduct = "whatsapp";

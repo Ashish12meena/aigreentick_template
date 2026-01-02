@@ -24,17 +24,20 @@ import com.aigreentick.services.template.dto.build.Language;
 import com.aigreentick.services.template.dto.build.LimitedTimeOffer;
 import com.aigreentick.services.template.dto.build.Media;
 import com.aigreentick.services.template.dto.build.MediaParameter;
-import com.aigreentick.services.template.dto.build.MessageTemplate;
+import com.aigreentick.services.template.dto.build.MessageRequest;
 import com.aigreentick.services.template.dto.build.Parameter;
 import com.aigreentick.services.template.dto.build.Product;
 import com.aigreentick.services.template.dto.build.SendableTemplate;
+import com.aigreentick.services.template.dto.build.TemplateCarouselButton;
+import com.aigreentick.services.template.dto.build.TemplateCarouselCardComponent;
+import com.aigreentick.services.template.dto.build.TemplateComponentButtonDto;
+import com.aigreentick.services.template.dto.build.TemplateComponentCardsDto;
+import com.aigreentick.services.template.dto.build.TemplateComponentDto;
+import com.aigreentick.services.template.dto.build.TemplateDto;
+import com.aigreentick.services.template.dto.build.TemplateTextDto;
 import com.aigreentick.services.template.dto.build.TextParameter;
 import com.aigreentick.services.template.dto.build.Video;
 import com.aigreentick.services.template.dto.request.SendTemplateRequestDto;
-import com.aigreentick.services.template.dto.request.TemplateCarouselButtonRequest;
-import com.aigreentick.services.template.dto.request.TemplateCarouselCardComponentRequest;
-import com.aigreentick.services.template.dto.request.TemplateComponentCardsRequest;
-import com.aigreentick.services.template.dto.request.TemplateComponentRequest;
 import com.aigreentick.services.template.dto.response.PhoneBookResponseDto;
 import com.aigreentick.services.template.enums.ButtonTypes;
 import com.aigreentick.services.template.enums.ComponentType;
@@ -45,30 +48,29 @@ import com.aigreentick.services.template.exceptions.CarouselConfigurationExcepti
 import com.aigreentick.services.template.exceptions.InvalidMediaType;
 import com.aigreentick.services.template.exceptions.InvalidTemplateCategory;
 import com.aigreentick.services.template.exceptions.InvalidTemplateComponentType;
-import com.aigreentick.services.template.model.Template;
-import com.aigreentick.services.template.model.TemplateComponent;
-import com.aigreentick.services.template.model.TemplateComponentButton;
-import com.aigreentick.services.template.model.TemplateText;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
+/*
+ * This service file used to build authentication , marketing and utility template that are used to send message on whatsapp
+ */
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class TemplateBuilderServiceImpl {
-    private final MediaServiceImpl mediaService;
     private final ChatContactServiceImpl phoneBookEntryService;
+    private final MediaServiceImpl mediaService;
 
     private static final int MAX_CARDS = MessageConstants.MAX_CARDS;
     private static final int MAX_BUTTONS_PER_CARD = MessageConstants.MAX_BUTTONS_PER_CARD;
 
-    public List<MessageTemplate> buildSendableTemplates(
+    public List<MessageRequest> buildSendableTemplates(
             Long userId,
             List<String> phoneNumbers,
-            Template template,
+            TemplateDto template,
             SendTemplateRequestDto requestDto) {
-
         String defaultValue = Optional.ofNullable(requestDto.getDefaultValue()).orElse("default");
         String mediaId = requestDto.isMedia() ? mediaService.getMediaIdById(requestDto.getMediaId()) : null;
         TemplateCategory templateCategory = TemplateCategory.valueOf(template.getCategory());
@@ -85,26 +87,25 @@ public class TemplateBuilderServiceImpl {
             }
             default -> throw new InvalidTemplateCategory("Unsupported template category: " + templateCategory);
         };
-
     }
 
     // ======================AUTHENTICATION================================================================================
 
-    private List<MessageTemplate> buildAuthenticationSendTemplates(
+    private List<MessageRequest> buildAuthenticationSendTemplates(
             List<String> phoneNumbers,
-            Template template,
+            TemplateDto template,
             SendTemplateRequestDto requestDto) {
         return phoneNumbers.stream()
                 .map(number -> buildAuthenticationSendTemplate(number, template, requestDto))
                 .collect(Collectors.toList());
     }
-
-    public MessageTemplate buildAuthenticationSendTemplate(
+ 
+    public MessageRequest buildAuthenticationSendTemplate(
             String phoneNumber,
-            Template template,
+            TemplateDto template,
             SendTemplateRequestDto requestDto) {
 
-        MessageTemplate messageRequest = new MessageTemplate();
+        MessageRequest messageRequest = new MessageRequest();
         messageRequest.setTo(phoneNumber);
 
         SendableTemplate sendableTemplate = new SendableTemplate();
@@ -141,27 +142,27 @@ public class TemplateBuilderServiceImpl {
 
     // ======================MARKETING=============================================================
 
-    private List<MessageTemplate> buildMarketingSendTemplates(
+    private List<MessageRequest> buildMarketingSendTemplates(
             List<String> phoneNumbers,
-            Template template,
+            TemplateDto template,
             Map<String, Map<String, String>> variables,
-            SendTemplateRequestDto buildTemplateRequestDto,
+            SendTemplateRequestDto SendTemplateRequestDto,
             String mediaId) {
 
         return phoneNumbers.stream()
                 .map(phoneNumber -> buildMarketingSendTemplate(phoneNumber, template, variables.get(phoneNumber),
-                        buildTemplateRequestDto, mediaId))
+                        SendTemplateRequestDto, mediaId))
                 .toList();
     }
 
-    public MessageTemplate buildMarketingSendTemplate(
+    public MessageRequest buildMarketingSendTemplate(
             String phoneNumber,
-            Template template,
+            TemplateDto template,
             Map<String, String> variables,
             SendTemplateRequestDto requestDto,
             String mediaId) {
 
-        MessageTemplate messageRequest = new MessageTemplate();
+        MessageRequest messageRequest = new MessageRequest();
         messageRequest.setTo(phoneNumber);
         messageRequest.setType(MessageType.TEMPLATE);
 
@@ -171,7 +172,7 @@ public class TemplateBuilderServiceImpl {
 
         List<Component> components = new ArrayList<>();
 
-        for (TemplateComponent comp : template.getComponents()) {
+        for (TemplateComponentDto comp : template.getComponents()) {
             switch (ComponentType.fromValue(comp.getType())) {
                 case HEADER -> {
                     Component header = buildHeaderComponent(comp, mediaId, template, variables);
@@ -217,8 +218,8 @@ public class TemplateBuilderServiceImpl {
     // ============Build-Components-HEADER-BODY-BUTTONS-COUPON-CAROUSEL-LTO=================================================================================
 
     private Component buildCarouselComponent(
-            TemplateComponentRequest comp,
-            Template template,
+            TemplateComponentDto comp,
+            TemplateDto template,
             Map<String, String> variables,
             SendTemplateRequestDto requestDto) {
         if (comp.getCards() == null || comp.getCards().isEmpty()) {
@@ -245,9 +246,9 @@ public class TemplateBuilderServiceImpl {
     }
 
     private Card buildCard(
-            TemplateComponentCardsRequest  templateCard,
+            TemplateComponentCardsDto templateCard,
             String format,
-            Template template,
+            TemplateDto template,
             Map<String, String> variables,
             Queue<String> mediaQueue,
             Queue<String> productQueue,
@@ -258,7 +259,7 @@ public class TemplateBuilderServiceImpl {
 
         List<CarouselComponent> carouselComponents = new ArrayList<>();
 
-        for (TemplateCarouselCardComponentRequest comp : templateCard.getComponents()) {
+        for (TemplateCarouselCardComponent comp : templateCard.getComponents()) {
             List<CarouselComponent> builtComponents = buildComponentsOfCarousel(comp, format, template, variables,
                     mediaQueue, productQueue, requestDto);
             if (builtComponents != null && !builtComponents.isEmpty()) {
@@ -271,9 +272,9 @@ public class TemplateBuilderServiceImpl {
     }
 
     private List<CarouselComponent> buildComponentsOfCarousel(
-            TemplateCarouselCardComponentRequest templateCarouselComponent,
+            TemplateCarouselCardComponent templateCarouselComponent,
             String format,
-            Template template,
+            TemplateDto template,
             Map<String, String> variables,
             Queue<String> mediaQueue,
             Queue<String> productQueue,
@@ -301,9 +302,9 @@ public class TemplateBuilderServiceImpl {
         }
     }
 
-    private List<CarouselComponent> buildButtonCarouselComponents(Template template,
-            TemplateCarouselCardComponentRequest templateCarouselComponent, Map<String, String> variables) {
-        List<TemplateCarouselButtonRequest> buttons = Optional.ofNullable(templateCarouselComponent.getButtons())
+    private List<CarouselComponent> buildButtonCarouselComponents(TemplateDto template,
+            TemplateCarouselCardComponent templateCarouselComponent, Map<String, String> variables) {
+        List<TemplateCarouselButton> buttons = Optional.ofNullable(templateCarouselComponent.getButtons())
                 .orElse(Collections.emptyList());
 
         String payload = "payload";
@@ -314,7 +315,7 @@ public class TemplateBuilderServiceImpl {
         }
         List<CarouselComponent> buttonComponents = new ArrayList<>();
 
-        for (TemplateCarouselButtonRequest button : templateCarouselComponent.getButtons()) {
+        for (TemplateCarouselButton button : templateCarouselComponent.getButtons()) {
             switch (ButtonTypes.fromValue(button.getType())) {
                 case URL -> {
                     Parameter param = template.getTexts().stream()
@@ -362,8 +363,8 @@ public class TemplateBuilderServiceImpl {
         return buttonComponents.isEmpty() ? null : buttonComponents;
     }
 
-    private CarouselComponent buildBodyCarouselComponent(Template template, Map<String, String> variables) {
-        List<TemplateText> bodyTexts = template.getTexts().stream()
+    private CarouselComponent buildBodyCarouselComponent(TemplateDto template, Map<String, String> variables) {
+        List<TemplateTextDto> bodyTexts = template.getTexts().stream()
                 .filter(t -> ComponentType.BODY.getValue().equalsIgnoreCase(t.getType()))
                 .toList();
 
@@ -382,8 +383,8 @@ public class TemplateBuilderServiceImpl {
         return component;
     }
 
-    private CarouselComponent buildHeaderMediaCarouselComponent(TemplateCarouselCardComponentRequest templateCarouselComponent,
-            String format, Template template, SendTemplateRequestDto requestDto, String mediaId) {
+    private CarouselComponent buildHeaderMediaCarouselComponent(TemplateCarouselCardComponent templateCarouselComponent,
+            String format, TemplateDto template, SendTemplateRequestDto requestDto, String mediaId) {
         CarouselComponent headerDto = new CarouselComponent();
         headerDto.setType(ComponentType.HEADER.getValue().toLowerCase());
         MediaType mediaType = MediaType.fromValue(format);
@@ -394,7 +395,7 @@ public class TemplateBuilderServiceImpl {
     }
 
     private CarouselComponent buildHeaderProductCarouselComponent(
-            TemplateCarouselCardComponentRequest templateCarouselComponent, String format, Template template,
+            TemplateCarouselCardComponent templateCarouselComponent, String format, TemplateDto template,
             SendTemplateRequestDto requestDto, String productRetailerId) {
         CarouselComponent headerDto = new CarouselComponent();
         headerDto.setType(ComponentType.HEADER.getValue().toLowerCase());
@@ -417,7 +418,7 @@ public class TemplateBuilderServiceImpl {
 
     private void addCopyCodeButtonIfPresent(
             SendTemplateRequestDto requestDto,
-            Template template,
+            TemplateDto template,
             List<Component> components) {
 
         if (requestDto.getCopyCode() == null)
@@ -441,7 +442,7 @@ public class TemplateBuilderServiceImpl {
                 });
     }
 
-    private Component buildHeaderComponent(TemplateComponent comp, String mediaId, Template template,
+    private Component buildHeaderComponent(TemplateComponentDto comp, String mediaId, TemplateDto template,
             Map<String, String> variables) {
         if ("TEXT".equalsIgnoreCase(comp.getFormat())) {
             return buildHeaderTextComponent(template, variables);
@@ -450,9 +451,9 @@ public class TemplateBuilderServiceImpl {
         }
     }
 
-    private Component buildHeaderTextComponent(Template template, Map<String, String> parameters) {
+    private Component buildHeaderTextComponent(TemplateDto template, Map<String, String> parameters) {
         // Get all HEADER texts
-        List<TemplateText> headerTexts = template.getTexts().stream()
+        List<TemplateTextDto> headerTexts = template.getTexts().stream()
                 .filter(t -> ComponentType.HEADER.getValue().equalsIgnoreCase(t.getType()))
                 .toList();
 
@@ -460,7 +461,7 @@ public class TemplateBuilderServiceImpl {
             return null;
 
         List<Parameter> componentParameters = new ArrayList<>();
-        for (TemplateText templateText : headerTexts) {
+        for (TemplateTextDto templateText : headerTexts) {
             String runtimeValue = parameters.get(templateText.getText());
             if (runtimeValue != null) {
                 componentParameters.add(buildTextParameter(runtimeValue, Parameter::new));
@@ -475,7 +476,7 @@ public class TemplateBuilderServiceImpl {
         return component;
     }
 
-    private Component buildHeaderMediaComponent(String format, String mediaId, Template template,
+    private Component buildHeaderMediaComponent(String format, String mediaId, TemplateDto template,
             Map<String, String> parameters) {
         Component component = new Component();
         component.setType(ComponentType.HEADER.getValue().toLowerCase());
@@ -487,8 +488,8 @@ public class TemplateBuilderServiceImpl {
 
     }
 
-    private Component buildBodyComponent(Template template, Map<String, String> variables) {
-        List<TemplateText> bodyTexts = template.getTexts().stream()
+    private Component buildBodyComponent(TemplateDto template, Map<String, String> variables) {
+        List<TemplateTextDto> bodyTexts = template.getTexts().stream()
                 .filter(t -> ComponentType.BODY.getValue().equalsIgnoreCase(t.getType()))
                 .toList();
 
@@ -508,13 +509,13 @@ public class TemplateBuilderServiceImpl {
     }
 
     private List<Component> buildButtonComponents(
-            Template template,
-            TemplateComponent templateComponent,
+            TemplateDto template,
+            TemplateComponentDto templateComponent,
             Map<String, String> variables) {
 
         List<Component> buttonComponents = new ArrayList<>();
 
-        for (TemplateComponentButton button : templateComponent.getButtons()) {
+        for (TemplateComponentButtonDto button : templateComponent.getButtons()) {
             switch (ButtonTypes.fromValue(button.getType())) {
                 case URL -> {
                     Parameter param = template.getTexts().stream()
@@ -630,14 +631,14 @@ public class TemplateBuilderServiceImpl {
      * paramatereized from frontend means it need data from database
      */
     private PhoneBookResponseDto buildParameters(
-            SendTemplateRequestDto buildTemplateRequestDto,
+            SendTemplateRequestDto SendTemplateRequestDto,
             List<String> filteredMobileNumbers,
-            Template template,
+            TemplateDto template,
             Long userId,
             String defaultValue) {
 
-        if (buildTemplateRequestDto.isFullyPrameterized()) {
-            Map<String, String> sharedParams = Optional.ofNullable(buildTemplateRequestDto.getParameters())
+        if (SendTemplateRequestDto.isFullyPrameterized()) {
+            Map<String, String> sharedParams = Optional.ofNullable(SendTemplateRequestDto.getParameters())
                     .orElseGet(Map::of);
 
             // Build data map for DTO
@@ -652,14 +653,14 @@ public class TemplateBuilderServiceImpl {
         } else {
             // In partial case we hit database and then override values from frontend
             List<String> keys = template.getTexts().stream()
-                    .map(TemplateText::getText)
+                    .map(TemplateTextDto::getText)
                     .toList();
 
             PhoneBookResponseDto parameters = phoneBookEntryService
                     .getParamsForPhoneNumbers(filteredMobileNumbers, keys, userId, defaultValue);
 
-            if (buildTemplateRequestDto.getParameters() != null) {
-                parameters.getData().values().forEach(map -> map.putAll(buildTemplateRequestDto.getParameters()));
+            if (SendTemplateRequestDto.getParameters() != null) {
+                parameters.getData().values().forEach(map -> map.putAll(SendTemplateRequestDto.getParameters()));
             }
 
             return parameters;
@@ -674,6 +675,7 @@ public class TemplateBuilderServiceImpl {
     private <T> void addAllIfNotEmpty(List<T> list, List<T> elements) {
         if (elements != null && !elements.isEmpty())
             list.addAll(elements);
-
+        
     }
+
 }

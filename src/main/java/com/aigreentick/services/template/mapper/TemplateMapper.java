@@ -5,6 +5,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.springframework.stereotype.Component;
 
+import com.aigreentick.services.template.dto.build.TemplateDto;
 import com.aigreentick.services.template.dto.request.CreateTemplateResponseDto;
 import com.aigreentick.services.template.dto.request.SupportedAppRequest;
 import com.aigreentick.services.template.dto.request.TemplateCarouselButtonRequest;
@@ -97,6 +98,13 @@ public class TemplateMapper {
         }
 
         return template;
+    }
+
+    //convert enity to convertable sendable dto 
+    public TemplateDto toTemplateDto(Template template){
+        TemplateDto dto = new TemplateDto();
+        return dto;
+
     }
 
     private TemplateComponent toComponent(TemplateComponentRequest req) {
