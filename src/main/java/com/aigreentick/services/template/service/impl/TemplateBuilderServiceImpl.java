@@ -636,7 +636,6 @@ public class TemplateBuilderServiceImpl {
             TemplateDto template,
             Long userId,
             String defaultValue) {
-
         if (SendTemplateRequestDto.isFullyPrameterized()) {
             Map<String, String> sharedParams = Optional.ofNullable(SendTemplateRequestDto.getParameters())
                     .orElseGet(Map::of);

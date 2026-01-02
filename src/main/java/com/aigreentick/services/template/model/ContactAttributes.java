@@ -13,8 +13,9 @@ public class ContactAttributes {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "contact_id", nullable = false)
-    private Integer contactId;
+    @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "contact_id", nullable = false)
+    private ChatContacts contact;
 
     @Column(name = "attribute", nullable = false, length = 255)
     private String attribute;
@@ -28,4 +29,3 @@ public class ContactAttributes {
     @Column(name = "updated_at", insertable = false, updatable = false)
     private Timestamp updatedAt;
 }
-

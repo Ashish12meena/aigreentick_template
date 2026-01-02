@@ -27,7 +27,6 @@ import com.aigreentick.services.template.dto.request.TemplateComponentRequest;
 import com.aigreentick.services.template.dto.request.TemplateRequest;
 import com.aigreentick.services.template.dto.request.TemplateTextRequest;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
-import com.aigreentick.services.template.enums.ButtonTypes;
 import com.aigreentick.services.template.enums.MediaFormat;
 import com.aigreentick.services.template.model.SupportedApp;
 import com.aigreentick.services.template.model.Template;

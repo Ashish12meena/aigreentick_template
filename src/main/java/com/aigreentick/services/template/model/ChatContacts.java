@@ -3,15 +3,14 @@ package com.aigreentick.services.template.model;
 import jakarta.persistence.*;
 import lombok.Data;
 import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.List;
 
 @Data
 @Entity
-@Table(
-    name = "chat_contacts",
-    uniqueConstraints = {
-        @UniqueConstraint(name = "unique_user_mobile", columnNames = {"user_id", "mobile"})
-    }
-)
+@Table(name = "chat_contacts", uniqueConstraints = {
+        @UniqueConstraint(name = "unique_user_mobile", columnNames = { "user_id", "mobile" })
+})
 public class ChatContacts {
 
     @Id
@@ -34,7 +33,7 @@ public class ChatContacts {
     private String email;
 
     @Column(name = "status", nullable = false)
-    private boolean status = true;
+    private Byte status = 1;
 
     @Column(name = "time")
     private Integer time;
@@ -53,4 +52,7 @@ public class ChatContacts {
 
     @Column(name = "deleted_at")
     private Timestamp deletedAt;
+
+    @OneToMany(mappedBy = "contact", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ContactAttributes> attributes = new ArrayList<>();
 }
