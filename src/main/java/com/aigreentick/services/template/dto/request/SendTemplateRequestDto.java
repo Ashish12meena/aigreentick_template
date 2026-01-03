@@ -9,7 +9,7 @@ import lombok.Data;
 
 @Data
 public class SendTemplateRequestDto {
-    private String temlateId;
+    private Long temlateId;
     private String campanyName;
     private Long countryId;
     private List<String> mobileNumbers;
@@ -22,7 +22,7 @@ public class SendTemplateRequestDto {
     private String defaultValue;
     private Map<String, String> parameters;
     private Long expirationTimeMs;
-    private boolean isMedia;
+    private Boolean isMedia;
     private long mediaId;
     private String mediaUrl;
     private String mediaType;

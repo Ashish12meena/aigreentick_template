@@ -56,4 +56,13 @@ public interface UserRepository extends JpaRepository<User, Long> {
      */
     @Query("SELECT u FROM User u WHERE u.id = :id AND u.deletedAt IS NULL")
     Optional<User> findByIdWithAccountAdmin(@Param("id") Long id);
+
+    @Query("select u.authMsgCharge from User u where u.id = :userId")
+    Double findAuthChargeByUserId(@Param("userId") Long userId);
+
+    @Query("select u.utiltyMsgCharge from User u where u.id = :userId")
+    Double findUtilityChargeByUserId(@Param("userId") Long userId);
+
+    @Query("select u.marketMsgCharge from User u where u.id = :userId")
+    Double findMarketingChargeByUserId(@Param("userId") Long userId);
 }

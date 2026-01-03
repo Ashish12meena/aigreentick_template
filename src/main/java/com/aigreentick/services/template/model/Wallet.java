@@ -1,4 +1,6 @@
 package com.aigreentick.services.template.model;
+
+
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
@@ -40,13 +42,14 @@ public class Wallet {
     @Column(name = "type", nullable = false, columnDefinition = "enum('credit','debit')")
     private WalletType type;
 
-    @Enumerated(EnumType.STRING)
+
+    // you can't enumify this
     @Column(
             name = "status",
             nullable = false,
             columnDefinition = "enum('1','0','2') COMMENT '1 is active | 0 is deactive | 2 is ban'"
     )
-    private WalletStatus status;
+    private String status;
 
     /* ================= META ================= */
 
@@ -80,11 +83,5 @@ public class Wallet {
     public enum WalletType {
         credit,
         debit
-    }
-
-    public enum WalletStatus {
-        _1, // active
-        _0, // deactive
-        _2  // ban
     }
 }

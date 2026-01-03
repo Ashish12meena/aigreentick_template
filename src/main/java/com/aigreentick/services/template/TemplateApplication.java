@@ -9,3 +9,4 @@ public class TemplateApplication {
 		SpringApplication.run(TemplateApplication.class, args);
 	}
 }
+

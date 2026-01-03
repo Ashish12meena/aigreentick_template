@@ -1,10 +1,11 @@
 package com.aigreentick.services.template.service.impl;
-
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.aigreentick.services.template.enums.MessageCategory;
 import com.aigreentick.services.template.model.User;
 import com.aigreentick.services.template.repository.UserRepository;
 
@@ -89,11 +90,11 @@ public class UserServiceImpl {
     @Transactional
     public User updateBalance(Long userId, Double newBalance) {
         log.info("Updating balance for userId: {} to {}", userId, newBalance);
-        
+
         User user = getUserById(userId);
         user.setBalance(newBalance);
         user.setUpdatedAt(LocalDateTime.now());
-        
+
         return userRepository.save(user);
     }
 
@@ -103,18 +104,18 @@ public class UserServiceImpl {
     @Transactional
     public User deductBalance(Long userId, Double amount) {
         log.info("Deducting {} from userId: {}", amount, userId);
-        
+
         User user = getUserById(userId);
-        
+
         if (!hasSufficientBalance(userId, amount)) {
             throw new IllegalStateException("Insufficient balance for userId: " + userId);
         }
-        
+
         double newBalance = user.getBalance() - amount;
         user.setBalance(newBalance);
         user.setDebit(user.getDebit() + amount);
         user.setUpdatedAt(LocalDateTime.now());
-        
+
         return userRepository.save(user);
     }
 
@@ -124,14 +125,14 @@ public class UserServiceImpl {
     @Transactional
     public User addBalance(Long userId, Double amount) {
         log.info("Adding {} to userId: {}", amount, userId);
-        
+
         User user = getUserById(userId);
         double newBalance = user.getBalance() + amount;
-        
+
         user.setBalance(newBalance);
         user.setCredit(user.getCredit() + amount);
         user.setUpdatedAt(LocalDateTime.now());
-        
+
         return userRepository.save(user);
     }
 
@@ -142,5 +143,31 @@ public class UserServiceImpl {
     public User save(User user) {
         log.debug("Saving user: {}", user.getEmail());
         return userRepository.save(user);
+    }
+
+    public BigDecimal getMessageCharge(Long userId, MessageCategory category) {
+
+        Double charge;
+
+        switch (category) {
+            case AUTHENTICATION ->
+                charge = userRepository.findAuthChargeByUserId(userId);
+
+            case UTILITY ->
+                charge = userRepository.findUtilityChargeByUserId(userId);
+
+            case MARKETING ->
+                charge = userRepository.findMarketingChargeByUserId(userId);
+
+            default -> throw new IllegalArgumentException(
+                    "Unsupported message category: " + category);
+        }
+
+        if (charge <=0 || charge == null ) {
+            throw new IllegalStateException(
+                    "Charge not configured for userId=" + userId + ", category=" + category);
+        }
+
+        return BigDecimal.valueOf(charge);
     }
 }

@@ -1,5 +1,6 @@
 package com.aigreentick.services.template.service.impl;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 import org.springframework.stereotype.Service;
@@ -78,5 +79,11 @@ public class CountryServiceImpl {
         if (!countryRepository.findActiveById(countryId).isPresent()) {
             throw new IllegalArgumentException("Invalid country ID: " + countryId);
         }
+    }
+
+    public Country save(Country countrt) {
+        countrt.setCreatedAt(LocalDateTime.now());
+        countrt.setUpdatedAt(LocalDateTime.now());
+        return countryRepository.save(countrt);
     }
 }
