@@ -6,3 +6,9 @@ spring:
   
   jackson:
     property-naming-strategy: SNAKE_CASE
+
+  jpa:
+    hibernate:
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+

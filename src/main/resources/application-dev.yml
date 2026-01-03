@@ -36,5 +36,10 @@ whatsapp-service:
   base-url: https://graph.facebook.com
   api-version: v23.0
 
+#----------Messaging broadcast Service --------
+Messaging-service:
+  base-url: http://localhost:8081/api/v1/broadcast/dispatch
+  
+
 # duplicate config currently used in @Value injections
 apiVersion: v23.0

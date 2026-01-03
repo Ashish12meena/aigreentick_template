@@ -27,15 +27,19 @@ public class TemplateCarouselCardButton {
     @Column(name = "card_button_index")
     private Integer cardButtonIndex; // new
 
+    @Column(name = "type")
     private String type; // // quick_reply, url, phone_number
 
+    @Column(name = "text")
     private String text;
 
+    @Column(name = "url")
     private String url;
 
     @Column(name = "phone_number")
     private String phoneNumber;
-
+    
+    @Column(name = "parameters")
     private String parameters;
 
     @Column(name = "created_at")

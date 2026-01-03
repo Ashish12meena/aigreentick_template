@@ -28,10 +28,13 @@ public class TemplateComponent {
     private Template template;
 
 
+    @Column(name = "type")
     private String type;
-
+    
+    @Column(name = "format")
     private String format;
-
+    
+    @Column(name = "text")
     private String text;
 
     /**

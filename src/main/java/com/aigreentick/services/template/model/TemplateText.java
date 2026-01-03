@@ -24,8 +24,10 @@ public class TemplateText {
     @JoinColumn(name = "template_id", nullable = false)
     private Template template;
 
+    @Column(name = "type")
     private String type; // new
-
+    
+    @Column(name = "text")
     private String text;
 
     @Column(name = "is_carousel")

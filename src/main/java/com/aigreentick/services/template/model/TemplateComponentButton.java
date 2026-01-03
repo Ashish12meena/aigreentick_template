@@ -35,6 +35,7 @@ public class TemplateComponentButton {
      * Type of the button.
      * Allowed values: QUICK_REPLY, URL, PHONE_NUMBER, OTP
      */
+    @Column(name = "type")
     private String type;
 
     /**
@@ -43,11 +44,14 @@ public class TemplateComponentButton {
     @Column(name = "otp_type")
     @Enumerated(EnumType.STRING)
     private OtpTypes otpType; // new
-
+    
+    @Column(name = "number")
     private String number;
-
+    
+    @Column(name = "text")
     private String text;
-
+    
+    @Column(name = "url")
     private String url;
 
     /**
@@ -61,7 +65,8 @@ public class TemplateComponentButton {
      */
     @Column(name = "autofill_text")
     private String autofillText; // new
-
+    
+    @Column(name = "example")
     List<String> example;// new
 
     @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
