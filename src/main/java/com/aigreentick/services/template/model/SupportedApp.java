@@ -2,6 +2,8 @@ package com.aigreentick.services.template.model;
 
 import java.util.Objects;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
@@ -31,6 +33,7 @@ public class SupportedApp {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "button_id", nullable = false)
+    @JsonBackReference 
     private TemplateComponentButton button; // new 
 
     @Column(name = "package_name")

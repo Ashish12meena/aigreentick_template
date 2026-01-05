@@ -8,6 +8,8 @@ import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+
 @Entity
 @Table(name = "template_carousel_card_buttons")
 @Data
@@ -22,6 +24,7 @@ public class TemplateCarouselCardButton {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "card_id", nullable = false)
+    @JsonBackReference
     private TemplateCarouselCard card;
 
     @Column(name = "card_button_index")

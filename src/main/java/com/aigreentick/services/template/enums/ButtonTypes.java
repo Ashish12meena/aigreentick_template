@@ -10,6 +10,7 @@ public enum ButtonTypes {
     CATALOG("CATALOG"),
     MPM("MPM"),
     SPM("SPM"),
+    PHONE_NUMBER("PHONE_NUMBER"),
     OTP("OTP");
 
     private final String value;

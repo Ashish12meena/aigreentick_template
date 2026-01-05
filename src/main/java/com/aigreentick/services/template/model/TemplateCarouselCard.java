@@ -11,6 +11,9 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
+import com.fasterxml.jackson.annotation.JsonBackReference;
+import com.fasterxml.jackson.annotation.JsonManagedReference;
+
 @Entity
 @Table(name = "template_carousel_cards")
 @Data
@@ -28,6 +31,7 @@ public class TemplateCarouselCard {
 
      @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id", nullable = false)
+    @JsonBackReference
     private TemplateComponent component;
 
     private String header;
@@ -49,6 +53,7 @@ public class TemplateCarouselCard {
 
     @OneToMany(mappedBy = "card", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
+    @JsonManagedReference 
     private List<TemplateCarouselCardButton> buttons = new ArrayList<>();
 
     @Column(name = "created_at")

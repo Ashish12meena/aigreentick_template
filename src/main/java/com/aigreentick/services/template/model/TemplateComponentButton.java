@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import com.aigreentick.services.template.enums.OtpTypes;
+import com.fasterxml.jackson.annotation.JsonBackReference;
 
 @Entity
 @Table(name = "template_component_buttons")
@@ -29,6 +30,7 @@ public class TemplateComponentButton {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id", nullable = false)
+    @JsonBackReference
     private TemplateComponent component;
 
     /**
