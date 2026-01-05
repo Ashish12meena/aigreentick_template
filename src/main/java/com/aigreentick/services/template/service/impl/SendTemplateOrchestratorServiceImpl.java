@@ -2,6 +2,7 @@ package com.aigreentick.services.template.service.impl;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -13,8 +14,11 @@ import org.springframework.transaction.annotation.Transactional;
 import com.aigreentick.services.template.client.adapter.MessagingClientImpl;
 import com.aigreentick.services.template.dto.build.MessageRequest;
 import com.aigreentick.services.template.dto.build.TemplateDto;
+import com.aigreentick.services.template.dto.request.BroadcastDispatchItemDto;
 import com.aigreentick.services.template.dto.request.DispatchRequestDto;
 import com.aigreentick.services.template.dto.request.SendTemplateRequestDto;
+import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
+import com.aigreentick.services.template.dto.response.BroadcastDispatchResponseDto;
 import com.aigreentick.services.template.dto.response.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.enums.Platform;
@@ -27,7 +31,6 @@ import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.model.User;
 import com.aigreentick.services.template.model.Wallet;
 import com.aigreentick.services.template.model.WhatsappAccount;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -45,7 +48,6 @@ public class SendTemplateOrchestratorServiceImpl {
     private final BroadcastServiceImpl broadcastService;
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
-    private final ChatContactServiceImpl chatContactService;
     private final TemplateBuilderServiceImpl templateBuilderService;
     private final MessagingClientImpl messagingClient;
     private final ObjectMapper objectMapper;
@@ -69,7 +71,7 @@ public class SendTemplateOrchestratorServiceImpl {
 
         // ========== STEP 4: Filter Blacklisted Numbers ==========
         List<String> validNumbers = filterBlacklistedNumbers(userId, request.getMobileNumbers());
-        log.info("Filtered numbers: {} valid out of {} total", 
+        log.info("Filtered numbers: {} valid out of {} total",
                 validNumbers.size(), request.getMobileNumbers().size());
 
         if (validNumbers.isEmpty()) {
@@ -80,8 +82,9 @@ public class SendTemplateOrchestratorServiceImpl {
         BigDecimal totalDeduction = pricePerMessage.multiply(new BigDecimal(validNumbers.size()));
         if (BigDecimal.valueOf(user.getBalance()).compareTo(totalDeduction) < 0) {
             throw new InsufficientBalanceException(
-                    String.format("Insufficient balance. Required: %.2f, Available: %.2f", 
-                            totalDeduction, user.getBalance()), 402);
+                    String.format("Insufficient balance. Required: %.2f, Available: %.2f",
+                            totalDeduction, user.getBalance()),
+                    402);
         }
 
         // ========== STEP 6: Create Broadcast Record ==========
@@ -101,7 +104,7 @@ public class SendTemplateOrchestratorServiceImpl {
 
         // ========== STEP 10: Build Templates and Dispatch ==========
         log.info("=== Building and dispatching messages at: {} ===", LocalDateTime.now());
-        dispatchMessages(userId, validNumbers, templateDto, request, broadcast.getId());
+        dispatchMessages(userId, validNumbers, templateDto, request, broadcast.getId(),config);
 
         log.info("=== Broadcast completed successfully ===");
         return TemplateResponseDto.builder()
@@ -162,9 +165,8 @@ public class SendTemplateOrchestratorServiceImpl {
                 .isMedia(request.getIsMedia() ? Broadcast.IsMedia._1 : Broadcast.IsMedia._0)
                 .data(data)
                 .total(validNumbers.size())
-                .scheduleAt(request.getScheduledAt() != null ? 
-                        LocalDateTime.ofInstant(request.getScheduledAt(), 
-                                java.time.ZoneId.systemDefault()) : null)
+                .scheduleAt(request.getScheduledAt() != null ? LocalDateTime.ofInstant(request.getScheduledAt(),
+                        java.time.ZoneId.systemDefault()) : null)
                 .status(Broadcast.Status._1) // Active
                 .numbers(String.join(",", validNumbers))
                 .createdAt(LocalDateTime.now())
@@ -182,7 +184,7 @@ public class SendTemplateOrchestratorServiceImpl {
     }
 
     private void deductWalletBalance(User user, BigDecimal totalDeduction, Long broadcastId) {
-        log.info("Deducting {} from userId: {} for broadcastId: {}", 
+        log.info("Deducting {} from userId: {} for broadcastId: {}",
                 totalDeduction, user.getId(), broadcastId);
 
         // Deduct from user balance
@@ -210,7 +212,7 @@ public class SendTemplateOrchestratorServiceImpl {
             Long broadcastId,
             List<String> validNumbers) {
 
-        log.info("Creating reports for {} numbers in batches of {}", 
+        log.info("Creating reports for {} numbers in batches of {}",
                 validNumbers.size(), BATCH_SIZE);
 
         // Process in batches to avoid memory issues
@@ -225,8 +227,8 @@ public class SendTemplateOrchestratorServiceImpl {
 
             reportService.saveAll(reports);
 
-            log.debug("Saved batch {}/{} ({} reports)", 
-                    (i / BATCH_SIZE) + 1, 
+            log.debug("Saved batch {}/{} ({} reports)",
+                    (i / BATCH_SIZE) + 1,
                     (validNumbers.size() + BATCH_SIZE - 1) / BATCH_SIZE,
                     reports.size());
         }
@@ -253,39 +255,66 @@ public class SendTemplateOrchestratorServiceImpl {
             List<String> validNumbers,
             TemplateDto templateDto,
             SendTemplateRequestDto request,
-            Long broadcastId) {
+            Long broadcastId,
+        WhatsappAccount whatsappAccount) {
 
         log.info("Building sendable templates for {} numbers", validNumbers.size());
+
+        // Get WhatsApp account configuration
+        WhatsappAccount config = whatsappAccount;
+
+        // Build WhatsApp account info for messaging service
+        WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
+                .phoneNumberId(config.getWhatsappNoId()) // Using whatsappNoId which is phoneNumberId
+                .accessToken(config.getParmenentToken()) // Using parmenentToken which is accessToken
+                .build();
 
         // Build all message requests
         List<MessageRequest> messageRequests = templateBuilderService.buildSendableTemplates(
                 userId, validNumbers, templateDto, request);
 
-        log.info("Dispatching {} messages to messaging service", messageRequests.size());
+        log.info("Building dispatch items for {} messages", messageRequests.size());
 
-        // Dispatch each message
+        // Convert MessageRequests to BroadcastDispatchItemDto
+        List<BroadcastDispatchItemDto> dispatchItems = new ArrayList<>();
+
         for (MessageRequest messageRequest : messageRequests) {
             try {
                 String payload = objectMapper.writeValueAsString(messageRequest);
 
-                DispatchRequestDto dispatchRequest = DispatchRequestDto.builder()
+                BroadcastDispatchItemDto item = BroadcastDispatchItemDto.builder()
                         .broadcastId(broadcastId)
-                        .mobileNumber(messageRequest.getTo())
+                        .mobileNo(messageRequest.getTo())
                         .payload(payload)
                         .build();
 
-                FacebookApiResponse<JsonNode> response = messagingClient.dispatchMessage(dispatchRequest);
-
-                if (!response.isSuccess()) {
-                    log.error("Failed to dispatch message to {}: {}", 
-                            messageRequest.getTo(), response.getErrorMessage());
-                }
+                dispatchItems.add(item);
 
             } catch (Exception e) {
-                log.error("Error dispatching message to {}", messageRequest.getTo(), e);
+                log.error("Error serializing message for {}", messageRequest.getTo(), e);
             }
         }
 
-        log.info("Message dispatch completed");
+        // Build dispatch request
+        DispatchRequestDto dispatchRequest = DispatchRequestDto.builder()
+                .items(dispatchItems)
+                .accountInfo(accountInfo)
+                .build();
+
+        log.info("Dispatching {} items to messaging service", dispatchItems.size());
+
+        // Dispatch to messaging service
+        FacebookApiResponse<BroadcastDispatchResponseDto> response = messagingClient.dispatchMessage(dispatchRequest);
+
+        if (response.isSuccess()) {
+            BroadcastDispatchResponseDto data = response.getData();
+            log.info("Dispatch completed. Total: {}, Failed: {}, Message: {}",
+                    data.getData().getTotalDispatched(),
+                    data.getData().getFailedCount(),
+                    data.getMessage());
+        } else {
+            log.error("Dispatch failed: {}", response.getErrorMessage());
+            throw new RuntimeException("Failed to dispatch messages: " + response.getErrorMessage());
+        }
     }
 }

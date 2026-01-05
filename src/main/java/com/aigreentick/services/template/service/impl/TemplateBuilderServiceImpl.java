@@ -72,7 +72,7 @@ public class TemplateBuilderServiceImpl {
             TemplateDto template,
             SendTemplateRequestDto requestDto) {
         String defaultValue = Optional.ofNullable(requestDto.getDefaultValue()).orElse("default");
-        String mediaId = requestDto.isMedia() ? mediaService.getMediaIdById(requestDto.getMediaId()) : null;
+        String mediaId = requestDto.getIsMedia() ? mediaService.getMediaIdById(requestDto.getMediaId()) : null;
         TemplateCategory templateCategory = TemplateCategory.valueOf(template.getCategory());
 
         return switch (templateCategory) {

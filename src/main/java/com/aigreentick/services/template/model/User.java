@@ -81,10 +81,9 @@ public class User {
 
     /* ================= STATUS FLAGS ================= */
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "online_status", nullable = false)
     @Builder.Default
-    private OnlineStatus onlineStatus = OnlineStatus._0;
+    private String onlineStatus = "0";
 
     @Column(name = "agent_id")
     private Integer agentId;
@@ -97,9 +96,8 @@ public class User {
     @Builder.Default
     private Double debit = 0.0;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    private AccountStatus status;
+    private String status;
 
     @Column(name = "domain", length = 255)
     private String domain;
@@ -147,14 +145,6 @@ public class User {
     private LocalDateTime deletedAt;
 
     /* ================= ENUMS (PIN-TO-PIN) ================= */
-
-    public enum OnlineStatus {
-        _0, _1
-    }
-
-    public enum AccountStatus {
-        _0, _1, _2
-    }
 
     public enum DemoStatus {
         on, off

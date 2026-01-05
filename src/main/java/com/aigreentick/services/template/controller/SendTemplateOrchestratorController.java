@@ -7,7 +7,6 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.aigreentick.services.template.constants.TemplateConstants;
-import com.aigreentick.services.template.dto.request.CreateTemplateResponseDto;
 import com.aigreentick.services.template.dto.request.SendTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
@@ -28,7 +27,7 @@ public class SendTemplateOrchestratorController {
     public ResponseEntity<?> createTemplate(
             @RequestBody SendTemplateRequestDto request) {
 
-        log.info("Creating template ");
+        log.info("broadcasting template ");
 
         Long userId = 1L;
 

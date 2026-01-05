@@ -27,7 +27,7 @@ public class SendTemplateRequestDto {
     private String mediaUrl;
     private String mediaType;
     List<String> mediaIdsForCarosel;
-    private String catalogId;
+    private String catalogId; 
     private List<String> productRetailerIds;
 
     @Future(message = "Schedule date must be in the future")

@@ -1,25 +1,20 @@
 package com.aigreentick.services.template.controller;
 
-import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.aigreentick.services.template.constants.TemplateConstants;
 import com.aigreentick.services.template.dto.request.CreateTemplateResponseDto;
-import com.aigreentick.services.template.dto.request.TempalatePaginationRequestDto;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.dto.response.TemplateSyncStats;
 import com.aigreentick.services.template.enums.ResponseStatus;
 import com.aigreentick.services.template.service.impl.TemplateOrchestratorServiceImpl;
 
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
