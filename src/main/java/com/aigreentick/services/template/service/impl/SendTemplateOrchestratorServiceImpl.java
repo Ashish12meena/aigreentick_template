@@ -31,6 +31,7 @@ import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.model.User;
 import com.aigreentick.services.template.model.Wallet;
 import com.aigreentick.services.template.model.WhatsappAccount;
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -162,12 +163,12 @@ public class SendTemplateOrchestratorServiceImpl {
                 .templateId(template.getId())
                 .countryId(request.getCountryId())
                 .campname(request.getCampanyName())
-                .isMedia(request.getIsMedia() ? Broadcast.IsMedia._1 : Broadcast.IsMedia._0)
+                .isMedia(request.getIsMedia() ? "1" : "0")
                 .data(data)
                 .total(validNumbers.size())
                 .scheduleAt(request.getScheduledAt() != null ? LocalDateTime.ofInstant(request.getScheduledAt(),
                         java.time.ZoneId.systemDefault()) : null)
-                .status(Broadcast.Status._1) // Active
+                .status("1") // Active
                 .numbers(String.join(",", validNumbers))
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -280,7 +281,9 @@ public class SendTemplateOrchestratorServiceImpl {
 
         for (MessageRequest messageRequest : messageRequests) {
             try {
-                String payload = objectMapper.writeValueAsString(messageRequest);
+                String payload = objectMapper
+                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                .writeValueAsString(messageRequest);
 
                 BroadcastDispatchItemDto item = BroadcastDispatchItemDto.builder()
                         .broadcastId(broadcastId)

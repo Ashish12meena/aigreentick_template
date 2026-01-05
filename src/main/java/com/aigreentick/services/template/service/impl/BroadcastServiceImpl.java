@@ -53,16 +53,20 @@ public class BroadcastServiceImpl {
     /**
      * Update broadcast status
      */
-    @Transactional
-    public Broadcast updateStatus(Long broadcastId, Broadcast.Status newStatus) {
-        log.info("Updating broadcast {} status to {}", broadcastId, newStatus);
+    // @Transactional
+    // public Broadcast updateStatus(Long broadcastId, Broadcast.Status newStatus) {
+    //     log.info("Updating broadcast {} status to {}", broadcastId, newStatus);
+
         
-        Broadcast broadcast = getBroadcastById(broadcastId);
-        broadcast.setStatus(newStatus);
-        broadcast.setUpdatedAt(LocalDateTime.now());
+    //     Broadcast broadcast = getBroadcastById(broadcastId);
+    //     if (newStatus==Broadcast.Status.) {
+            
+    //     }
+    //     broadcast.setStatus();
+    //     broadcast.setUpdatedAt(LocalDateTime.now());
         
-        return broadcastRepository.save(broadcast);
-    }
+    //     return broadcastRepository.save(broadcast);
+    // }
 
     /**
      * Save multiple broadcasts

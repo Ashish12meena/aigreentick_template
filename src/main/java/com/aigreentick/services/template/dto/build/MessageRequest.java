@@ -24,7 +24,8 @@ public class MessageRequest {
     private String to;
 
     @NotNull
-    private MessageType type;
+    @Builder.Default
+    private String type = "template";
 
     private SendableTemplate template;
 

@@ -164,7 +164,7 @@ public class TemplateBuilderServiceImpl {
 
         MessageRequest messageRequest = new MessageRequest();
         messageRequest.setTo(phoneNumber);
-        messageRequest.setType(MessageType.TEMPLATE);
+        messageRequest.setType("template");
 
         SendableTemplate sendableTemplate = new SendableTemplate();
         sendableTemplate.setName(template.getName());

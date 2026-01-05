@@ -305,9 +305,11 @@ public class TemplateMapper {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
+         // Auto-generate button indices
         if (req.getButtons() != null) {
+            AtomicInteger buttonIndex = new AtomicInteger(0);
             for (TemplateComponentButtonRequest btnReq : req.getButtons()) {
-                comp.addButton(toButton(btnReq));
+                comp.addButton(toButton(btnReq, buttonIndex.getAndIncrement()));
             }
         }
 
@@ -321,14 +323,14 @@ public class TemplateMapper {
         return comp;
     }
 
-    private TemplateComponentButton toButton(TemplateComponentButtonRequest req) {
+    private TemplateComponentButton toButton(TemplateComponentButtonRequest req,int index) {
         TemplateComponentButton btn = TemplateComponentButton.builder()
                 .type(req.getType() != null ? req.getType().getValue() : null)
                 .otpType(req.getOtpType())
                 .number(req.getPhoneNumber())
                 .text(req.getText())
                 .url(req.getUrl())
-                .buttonIndex(req.getIndex())
+                .buttonIndex(index)  // Use auto-generated index
                 .autofillText(req.getAutofillText())
                 .example(req.getExample())
                 .createdAt(LocalDateTime.now())

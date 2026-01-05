@@ -49,9 +49,8 @@ public class Broadcast {
     @Column(name = "campname", nullable = false, length = 255)
     private String campname;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "is_media", nullable = false)
-    private IsMedia isMedia;
+    @Column(name = "is_media", nullable = false, columnDefinition = "enum('0','1')")
+    private String isMedia;
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "data")
@@ -64,10 +63,9 @@ public class Broadcast {
     @Column(name = "schedule_at")
     private LocalDateTime scheduleAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false,columnDefinition = "enum('0','1','2')")
     @Builder.Default
-    private Status status = Status._1;
+    private String status = "1";
 
     /* ================= PAYLOAD ================= */
 

@@ -38,10 +38,9 @@ public interface UserRepository extends JpaRepository<User, Long> {
     boolean existsByMobileAndDeletedAtIsNull(String mobile);
 
     /**
-     * Find active user by ID
+     * Find active user by ID (status = '1' means active)
      */
-    @Query("SELECT u FROM User u WHERE u.id = :id AND u.deletedAt IS NULL " +
-           "AND u.status = com.aigreentick.services.template.model.User$AccountStatus._1")
+    @Query("SELECT u FROM User u WHERE u.id = :id AND u.deletedAt IS NULL AND u.status = '1'")
     Optional<User> findActiveById(@Param("id") Long id);
 
     /**
@@ -57,12 +56,21 @@ public interface UserRepository extends JpaRepository<User, Long> {
     @Query("SELECT u FROM User u WHERE u.id = :id AND u.deletedAt IS NULL")
     Optional<User> findByIdWithAccountAdmin(@Param("id") Long id);
 
-    @Query("select u.authMsgCharge from User u where u.id = :userId")
+    /**
+     * Get authentication message charge for user
+     */
+    @Query("SELECT u.authMsgCharge FROM User u WHERE u.id = :userId")
     Double findAuthChargeByUserId(@Param("userId") Long userId);
 
-    @Query("select u.utiltyMsgCharge from User u where u.id = :userId")
+    /**
+     * Get utility message charge for user
+     */
+    @Query("SELECT u.utiltyMsgCharge FROM User u WHERE u.id = :userId")
     Double findUtilityChargeByUserId(@Param("userId") Long userId);
 
-    @Query("select u.marketMsgCharge from User u where u.id = :userId")
+    /**
+     * Get marketing message charge for user
+     */
+    @Query("SELECT u.marketMsgCharge FROM User u WHERE u.id = :userId")
     Double findMarketingChargeByUserId(@Param("userId") Long userId);
 }

@@ -81,7 +81,7 @@ public class User {
 
     /* ================= STATUS FLAGS ================= */
 
-    @Column(name = "online_status", nullable = false)
+    @Column(name = "online_status", nullable = false,columnDefinition = "enum('0','1')")
     @Builder.Default
     private String onlineStatus = "0";
 
@@ -96,7 +96,7 @@ public class User {
     @Builder.Default
     private Double debit = 0.0;
 
-    @Column(name = "status", nullable = false)
+    @Column(name = "status", nullable = false, columnDefinition = "enum('1','0','2') COMMENT '1 is active | 0 is deactive | 2 is ban'")
     private String status;
 
     @Column(name = "domain", length = 255)
