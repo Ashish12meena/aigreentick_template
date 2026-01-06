@@ -23,7 +23,6 @@ import com.aigreentick.services.template.dto.build.Image;
 import com.aigreentick.services.template.dto.build.Language;
 import com.aigreentick.services.template.dto.build.LimitedTimeOffer;
 import com.aigreentick.services.template.dto.build.Media;
-import com.aigreentick.services.template.dto.build.MediaParameter;
 import com.aigreentick.services.template.dto.build.MessageRequest;
 import com.aigreentick.services.template.dto.build.Parameter;
 import com.aigreentick.services.template.dto.build.Product;
@@ -42,7 +41,6 @@ import com.aigreentick.services.template.dto.response.PhoneBookResponseDto;
 import com.aigreentick.services.template.enums.ButtonTypes;
 import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.enums.MediaType;
-import com.aigreentick.services.template.enums.MessageType;
 import com.aigreentick.services.template.enums.TemplateCategory;
 import com.aigreentick.services.template.exceptions.CarouselConfigurationException;
 import com.aigreentick.services.template.exceptions.InvalidMediaType;
@@ -51,10 +49,6 @@ import com.aigreentick.services.template.exceptions.InvalidTemplateComponentType
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-
-/*
- * This service file used to build authentication , marketing and utility template that are used to send message on whatsapp
- */
 
 @Service
 @Slf4j
@@ -71,25 +65,22 @@ public class TemplateBuilderServiceImpl {
             List<String> phoneNumbers,
             TemplateDto template,
             SendTemplateRequestDto requestDto) {
+        
         String defaultValue = Optional.ofNullable(requestDto.getDefaultValue()).orElse("default");
-        String mediaId = requestDto.getIsMedia() ? mediaService.getMediaIdById(requestDto.getMediaId()) : null;
         TemplateCategory templateCategory = TemplateCategory.valueOf(template.getCategory());
 
         return switch (templateCategory) {
-            case AUTHENTICATION ->
-                buildAuthenticationSendTemplates(phoneNumbers, template, requestDto);
-
+            case AUTHENTICATION -> buildAuthenticationSendTemplates(phoneNumbers, template, requestDto);
             case MARKETING, UTILITY -> {
                 Map<String, Map<String, String>> parameters = buildParameters(
                         requestDto, phoneNumbers, template, userId, defaultValue).getData();
-                yield buildMarketingSendTemplates(phoneNumbers, template, parameters, requestDto,
-                        mediaId);
+                yield buildMarketingSendTemplates(phoneNumbers, template, parameters, requestDto);
             }
             default -> throw new InvalidTemplateCategory("Unsupported template category: " + templateCategory);
         };
     }
 
-    // ======================AUTHENTICATION================================================================================
+    // ====================== AUTHENTICATION ======================
 
     private List<MessageRequest> buildAuthenticationSendTemplates(
             List<String> phoneNumbers,
@@ -134,24 +125,22 @@ public class TemplateBuilderServiceImpl {
         components.add(buttonComponent);
 
         sendableTemplate.setComponents(components);
-
         messageRequest.setTemplate(sendableTemplate);
 
         return messageRequest;
     }
 
-    // ======================MARKETING=============================================================
+    // ====================== MARKETING/UTILITY ======================
 
     private List<MessageRequest> buildMarketingSendTemplates(
             List<String> phoneNumbers,
             TemplateDto template,
             Map<String, Map<String, String>> variables,
-            SendTemplateRequestDto SendTemplateRequestDto,
-            String mediaId) {
+            SendTemplateRequestDto requestDto) {
 
         return phoneNumbers.stream()
-                .map(phoneNumber -> buildMarketingSendTemplate(phoneNumber, template, variables.get(phoneNumber),
-                        SendTemplateRequestDto, mediaId))
+                .map(phoneNumber -> buildMarketingSendTemplate(
+                        phoneNumber, template, variables.get(phoneNumber), requestDto))
                 .toList();
     }
 
@@ -159,8 +148,7 @@ public class TemplateBuilderServiceImpl {
             String phoneNumber,
             TemplateDto template,
             Map<String, String> variables,
-            SendTemplateRequestDto requestDto,
-            String mediaId) {
+            SendTemplateRequestDto requestDto) {
 
         MessageRequest messageRequest = new MessageRequest();
         messageRequest.setTo(phoneNumber);
@@ -175,7 +163,7 @@ public class TemplateBuilderServiceImpl {
         for (TemplateComponentDto comp : template.getComponents()) {
             switch (ComponentType.fromValue(comp.getType())) {
                 case HEADER -> {
-                    Component header = buildHeaderComponent(comp, mediaId, template, variables);
+                    Component header = buildHeaderComponent(comp, template, variables, requestDto);
                     addIfNotNull(components, header);
                 }
                 case BODY -> {
@@ -203,25 +191,107 @@ public class TemplateBuilderServiceImpl {
         sendableTemplate.setComponents(components);
         messageRequest.setTemplate(sendableTemplate);
 
-        // debug log of payload
-        // try {
-        // log.debug("Built marketing payload for {}: {}", phoneNumber,
-        // JsonUtils.serializeToString(messageRequest));
-        // } catch (Exception e) {
-        // log.debug("Could not serialize payload for debug logging", e);
-        // }
-
         return messageRequest;
-
     }
 
-    // ============Build-Components-HEADER-BODY-BUTTONS-COUPON-CAROUSEL-LTO=================================================================================
+    // ====================== HEADER COMPONENT ======================
+
+    private Component buildHeaderComponent(
+            TemplateComponentDto comp,
+            TemplateDto template,
+            Map<String, String> variables,
+            SendTemplateRequestDto requestDto) {
+        
+        if ("TEXT".equalsIgnoreCase(comp.getFormat())) {
+            return buildHeaderTextComponent(template, variables);
+        } else {
+            return buildHeaderMediaComponent(comp, requestDto);
+        }
+    }
+
+    private Component buildHeaderTextComponent(TemplateDto template, Map<String, String> parameters) {
+        List<TemplateTextDto> headerTexts = template.getTexts().stream()
+                .filter(t -> ComponentType.HEADER.getValue().equalsIgnoreCase(t.getType()))
+                .toList();
+
+        if (headerTexts.isEmpty()) return null;
+
+        List<Parameter> componentParameters = new ArrayList<>();
+        for (TemplateTextDto templateText : headerTexts) {
+            String runtimeValue = parameters.get(templateText.getText());
+            if (runtimeValue != null) {
+                componentParameters.add(buildTextParameter(runtimeValue, Parameter::new));
+            }
+        }
+        if (componentParameters.isEmpty()) return null;
+
+        Component component = new Component();
+        component.setType(ComponentType.HEADER.getValue().toLowerCase());
+        component.setParameters(componentParameters);
+        return component;
+    }
+
+    private Component buildHeaderMediaComponent(
+            TemplateComponentDto comp,
+            SendTemplateRequestDto requestDto) {
+        
+        MediaType mediaType = MediaType.fromValue(comp.getFormat());
+        
+        // Determine media source: frontend mediaId or template's stored URL
+        String mediaId = resolveMediaId(requestDto);
+        String mediaUrl = resolveMediaUrl(comp, requestDto);
+        
+        if (mediaId == null && mediaUrl == null) {
+            log.warn("No media ID or URL available for header component");
+            return null;
+        }
+
+        Component component = new Component();
+        component.setType(ComponentType.HEADER.getValue().toLowerCase());
+        
+        Parameter mediaParam = buildMediaParameterWithFallback(mediaType, mediaId, mediaUrl);
+        component.setParameters(List.of(mediaParam));
+        
+        return component;
+    }
+
+    /**
+     * Resolves media ID from request (frontend provided)
+     */
+    private String resolveMediaId(SendTemplateRequestDto requestDto) {
+        if (Boolean.TRUE.equals(requestDto.getIsMedia()) && requestDto.getMediaId() > 0) {
+            return mediaService.getMediaIdById(requestDto.getMediaId());
+        }
+        return null;
+    }
+
+    /**
+     * Resolves media URL from request or template's stored example
+     */
+    private String resolveMediaUrl(TemplateComponentDto comp, SendTemplateRequestDto requestDto) {
+        // First check if URL provided directly in request
+        if (requestDto.getMediaUrl() != null && !requestDto.getMediaUrl().isBlank()) {
+            return requestDto.getMediaUrl();
+        }
+        
+        // Fallback to template's stored URL from example.headerHandle
+        if (comp.getExample() != null && 
+            comp.getExample().getHeaderHandle() != null && 
+            !comp.getExample().getHeaderHandle().isEmpty()) {
+            return comp.getExample().getHeaderHandle().get(0);
+        }
+        
+        return null;
+    }
+
+    // ====================== CAROUSEL COMPONENT ======================
 
     private Component buildCarouselComponent(
             TemplateComponentDto comp,
             TemplateDto template,
             Map<String, String> variables,
             SendTemplateRequestDto requestDto) {
+        
         if (comp.getCards() == null || comp.getCards().isEmpty()) {
             throw new CarouselConfigurationException("Carousel component must contain at least one card");
         }
@@ -229,18 +299,19 @@ public class TemplateBuilderServiceImpl {
             throw new CarouselConfigurationException("Carousel supports max " + MAX_CARDS + " cards");
         }
 
-        Queue<String> productRetailerIds = new ConcurrentLinkedQueue<>(
-                Optional.ofNullable(requestDto.getProductRetailerIds())
-                        .orElse(Collections.emptyList()));
-        Queue<String> mediaIds = new ConcurrentLinkedQueue<>(
+        // Queue of media IDs from frontend (can be empty)
+        Queue<String> mediaIdQueue = new ConcurrentLinkedQueue<>(
                 Optional.ofNullable(requestDto.getMediaIdsForCarosel()).orElse(Collections.emptyList()));
+        
+        Queue<String> productRetailerIds = new ConcurrentLinkedQueue<>(
+                Optional.ofNullable(requestDto.getProductRetailerIds()).orElse(Collections.emptyList()));
 
         Component component = new Component();
-        component.setType(comp.getType().toLowerCase()); // carousel
+        component.setType(comp.getType().toLowerCase());
 
         List<Card> cards = comp.getCards().stream()
-                .map(templateCard -> buildCard(templateCard, comp.getFormat(), template, variables, mediaIds,
-                        productRetailerIds, requestDto))
+                .map(templateCard -> buildCard(
+                        templateCard, template, variables, mediaIdQueue, productRetailerIds, requestDto))
                 .toList();
 
         component.setCards(cards);
@@ -249,10 +320,9 @@ public class TemplateBuilderServiceImpl {
 
     private Card buildCard(
             TemplateComponentCardsDto templateCard,
-            String format,
             TemplateDto template,
             Map<String, String> variables,
-            Queue<String> mediaQueue,
+            Queue<String> mediaIdQueue,
             Queue<String> productQueue,
             SendTemplateRequestDto requestDto) {
 
@@ -262,110 +332,96 @@ public class TemplateBuilderServiceImpl {
         List<CarouselComponent> carouselComponents = new ArrayList<>();
 
         for (TemplateCarouselCardComponent comp : templateCard.getComponents()) {
-            List<CarouselComponent> builtComponents = buildComponentsOfCarousel(comp, format, template, variables,
-                    mediaQueue, productQueue, requestDto);
-            if (builtComponents != null && !builtComponents.isEmpty()) {
-                carouselComponents.addAll(builtComponents);
-            }
+            List<CarouselComponent> builtComponents = buildCarouselCardComponent(
+                    comp, template, variables, mediaIdQueue, productQueue, requestDto);
+            addAllIfNotEmpty(carouselComponents, builtComponents);
         }
 
         card.setComponents(carouselComponents);
         return card;
     }
 
-    private List<CarouselComponent> buildComponentsOfCarousel(
-            TemplateCarouselCardComponent templateCarouselComponent,
-            String format,
+    private List<CarouselComponent> buildCarouselCardComponent(
+            TemplateCarouselCardComponent comp,
             TemplateDto template,
             Map<String, String> variables,
-            Queue<String> mediaQueue,
+            Queue<String> mediaIdQueue,
             Queue<String> productQueue,
             SendTemplateRequestDto requestDto) {
 
-        switch (ComponentType.fromValue(templateCarouselComponent.getType())) {
+        return switch (ComponentType.fromValue(comp.getType())) {
             case HEADER -> {
-                return List.of(
-                        MediaType.fromValue(templateCarouselComponent.getFormat()) == MediaType.PRODUCT
-                                ? buildHeaderProductCarouselComponent(templateCarouselComponent,
-                                        templateCarouselComponent.getFormat(),
-                                        template, requestDto, productQueue.poll())
-                                : buildHeaderMediaCarouselComponent(templateCarouselComponent,
-                                        templateCarouselComponent.getFormat(),
-                                        template, requestDto, mediaQueue.poll()));
+                MediaType mediaType = MediaType.fromValue(comp.getFormat());
+                if (mediaType == MediaType.PRODUCT) {
+                    yield List.of(buildCarouselHeaderProductComponent(comp, requestDto, productQueue.poll()));
+                } else {
+                    yield List.of(buildCarouselHeaderMediaComponent(comp, mediaIdQueue.poll()));
+                }
             }
             case BODY -> {
-                return List.of(buildBodyCarouselComponent(template, variables));
+                CarouselComponent body = buildCarouselBodyComponent(template, variables);
+                yield body != null ? List.of(body) : Collections.emptyList();
             }
-            case BUTTONS -> {
-                return buildButtonCarouselComponents(template, templateCarouselComponent, variables);
-            }
-            default -> throw new InvalidTemplateComponentType(
-                    "Unsupported component type: " + templateCarouselComponent.getType());
-        }
+            case BUTTONS -> buildCarouselButtonComponents(template, comp, variables);
+            default -> throw new InvalidTemplateComponentType("Unsupported carousel component type: " + comp.getType());
+        };
     }
 
-    private List<CarouselComponent> buildButtonCarouselComponents(TemplateDto template,
-            TemplateCarouselCardComponent templateCarouselComponent, Map<String, String> variables) {
-        List<TemplateCarouselButton> buttons = Optional.ofNullable(templateCarouselComponent.getButtons())
-                .orElse(Collections.emptyList());
-
-        String payload = "payload";
-
-        if (buttons.size() > MAX_BUTTONS_PER_CARD) {
+    /**
+     * Builds carousel header with media - uses ID if provided, otherwise falls back to template URL
+     */
+    private CarouselComponent buildCarouselHeaderMediaComponent(
+            TemplateCarouselCardComponent comp,
+            String mediaIdFromQueue) {
+        
+        MediaType mediaType = MediaType.fromValue(comp.getFormat());
+        
+        // Try to get URL from template's stored example
+        String templateUrl = extractTemplateMediaUrl(comp);
+        
+        // Build parameter with fallback logic
+        Parameter mediaParam = buildMediaParameterWithFallback(mediaType, mediaIdFromQueue, templateUrl);
+        
+        if (mediaParam == null) {
             throw new CarouselConfigurationException(
-                    "Carousel card supports at most " + MAX_BUTTONS_PER_CARD + " buttons");
-        }
-        List<CarouselComponent> buttonComponents = new ArrayList<>();
-
-        for (TemplateCarouselButton button : templateCarouselComponent.getButtons()) {
-            switch (ButtonTypes.fromValue(button.getType())) {
-                case URL -> {
-                    Parameter param = template.getTexts().stream()
-                            .filter(t -> "BUTTON".equalsIgnoreCase(t.getType()))
-                            .map(t -> buildCarouselTextParam(variables, t.getText()))
-                            .filter(Objects::nonNull)
-                            .findFirst()
-                            .orElse(null);
-                    if (param != null) {
-                        CarouselComponent component = new CarouselComponent();
-                        component.setType("button");
-                        component.setSubType(button.getType().toLowerCase()); // url
-                        component.setIndex(button.getIndex()); // button position
-                        component.setParameters(List.of(param));
-                        buttonComponents.add(component);
-                    } else {
-                        log.debug(
-                                "Skipping URL carousel button at index {} because runtime BUTTON parameter not provided",
-                                button.getIndex());
-                    }
-                }
-                case QUICK_REPLY -> {
-                    Parameter param = template.getTexts().stream()
-                            .filter(t -> "BUTTON".equalsIgnoreCase(t.getType()))
-                            .map(t -> buildCarouselQuickReplyParam(payload))
-                            .filter(Objects::nonNull)
-                            .findFirst()
-                            .orElse(null);
-                    if (param != null) {
-                        CarouselComponent component = new CarouselComponent();
-                        component.setType("button");
-                        component.setSubType(button.getType().toLowerCase()); // quick_reply
-                        component.setIndex(button.getIndex());
-                        component.setParameters(List.of(param));
-                        buttonComponents.add(component);
-                    } else {
-                        log.debug(
-                                "Skipping QUICK_REPLY carousel button at index {} because runtime BUTTON parameter not provided",
-                                button.getIndex());
-                    }
-                }
-            }
+                    "No media ID or URL available for carousel card header. " +
+                    "Either provide mediaIdsForCarosel or ensure template has stored media URLs.");
         }
 
-        return buttonComponents.isEmpty() ? null : buttonComponents;
+        CarouselComponent headerComponent = new CarouselComponent();
+        headerComponent.setType(ComponentType.HEADER.getValue().toLowerCase());
+        headerComponent.setParameters(List.of(mediaParam));
+        
+        return headerComponent;
     }
 
-    private CarouselComponent buildBodyCarouselComponent(TemplateDto template, Map<String, String> variables) {
+    /**
+     * Extracts media URL from carousel card component's example
+     */
+    private String extractTemplateMediaUrl(TemplateCarouselCardComponent comp) {
+        if (comp.getExample() != null && 
+            comp.getExample().getHeaderHandle() != null && 
+            !comp.getExample().getHeaderHandle().isEmpty()) {
+            return comp.getExample().getHeaderHandle().get(0);
+        }
+        return null;
+    }
+
+    private CarouselComponent buildCarouselHeaderProductComponent(
+            TemplateCarouselCardComponent comp,
+            SendTemplateRequestDto requestDto,
+            String productRetailerId) {
+        
+        CarouselComponent headerComponent = new CarouselComponent();
+        headerComponent.setType(ComponentType.HEADER.getValue().toLowerCase());
+        
+        Parameter productParam = buildProductParameter(requestDto.getCatalogId(), productRetailerId);
+        headerComponent.setParameters(List.of(productParam));
+        
+        return headerComponent;
+    }
+
+    private CarouselComponent buildCarouselBodyComponent(TemplateDto template, Map<String, String> variables) {
         List<TemplateTextDto> bodyTexts = template.getTexts().stream()
                 .filter(t -> ComponentType.BODY.getValue().equalsIgnoreCase(t.getType()))
                 .toList();
@@ -376,8 +432,7 @@ public class TemplateBuilderServiceImpl {
                 .map(val -> buildTextParameter(val, Parameter::new))
                 .toList();
 
-        if (params.isEmpty())
-            return null;
+        if (params.isEmpty()) return null;
 
         CarouselComponent component = new CarouselComponent();
         component.setType(ComponentType.BODY.getValue().toLowerCase());
@@ -385,110 +440,73 @@ public class TemplateBuilderServiceImpl {
         return component;
     }
 
-    private CarouselComponent buildHeaderMediaCarouselComponent(TemplateCarouselCardComponent templateCarouselComponent,
-            String format, TemplateDto template, SendTemplateRequestDto requestDto, String mediaId) {
-        CarouselComponent headerDto = new CarouselComponent();
-        headerDto.setType(ComponentType.HEADER.getValue().toLowerCase());
-        MediaType mediaType = MediaType.fromValue(format);
-        List<Parameter> carouselParameterDto = new ArrayList<>();
-        carouselParameterDto.add(buildMediaParameter(mediaType, mediaId, Parameter::new));
-        headerDto.setParameters(carouselParameterDto);
-        return headerDto;
-    }
-
-    private CarouselComponent buildHeaderProductCarouselComponent(
-            TemplateCarouselCardComponent templateCarouselComponent, String format, TemplateDto template,
-            SendTemplateRequestDto requestDto, String productRetailerId) {
-        CarouselComponent headerDto = new CarouselComponent();
-        headerDto.setType(ComponentType.HEADER.getValue().toLowerCase());
-        List<Parameter> carouselParameterDto = new ArrayList<>();
-        carouselParameterDto.add(buildProductParameter(requestDto.getCatalogId(), productRetailerId));
-        headerDto.setParameters(carouselParameterDto);
-        return headerDto;
-
-    }
-
-    private Component buildLimitedTimeOfferComponent(SendTemplateRequestDto requestDto) {
-        if (requestDto.getExpirationTimeMs() == null)
-            throw new IllegalArgumentException("expiration_time_ms required for LTO templates");
-
-        Component component = new Component();
-        component.setType(ComponentType.LIMITED_TIME_OFFER.getValue().toLowerCase());
-        component.setParameters(List.of(buildLimitedTimeOfferParam(requestDto.getExpirationTimeMs())));
-        return component;
-    }
-
-    private void addCopyCodeButtonIfPresent(
-            SendTemplateRequestDto requestDto,
+    private List<CarouselComponent> buildCarouselButtonComponents(
             TemplateDto template,
-            List<Component> components) {
-
-        if (requestDto.getCopyCode() == null)
-            return;
-
-        template.getComponents().stream()
-                .filter(c -> ComponentType.BUTTONS.getValue().equalsIgnoreCase(c.getType()))
-                .flatMap(c -> c.getButtons().stream())
-                .filter(b -> ButtonTypes.COPY_CODE.getValue().equalsIgnoreCase(b.getType()))
-                .findFirst()
-                .ifPresent(button -> {
-                    Component couponButton = new Component();
-                    couponButton.setType("button");
-                    couponButton.setSubType(button.getType().toLowerCase());
-                    couponButton.setIndex(String.valueOf(button.getIndex()));
-                    Parameter param = new Parameter();
-                    param.setType("coupon_code");
-                    param.setCouponCode(requestDto.getCopyCode());
-                    couponButton.setParameters(List.of(param));
-                    components.add(couponButton);
-                });
-    }
-
-    private Component buildHeaderComponent(TemplateComponentDto comp, String mediaId, TemplateDto template,
+            TemplateCarouselCardComponent comp,
             Map<String, String> variables) {
-        if ("TEXT".equalsIgnoreCase(comp.getFormat())) {
-            return buildHeaderTextComponent(template, variables);
-        } else {
-            return buildHeaderMediaComponent(comp.getFormat(), mediaId, template, variables);
+        
+        List<TemplateCarouselButton> buttons = Optional.ofNullable(comp.getButtons())
+                .orElse(Collections.emptyList());
+
+        if (buttons.size() > MAX_BUTTONS_PER_CARD) {
+            throw new CarouselConfigurationException(
+                    "Carousel card supports at most " + MAX_BUTTONS_PER_CARD + " buttons");
         }
+
+        String payload = "payload";
+        List<CarouselComponent> buttonComponents = new ArrayList<>();
+
+        for (TemplateCarouselButton button : buttons) {
+            CarouselComponent btnComp = switch (ButtonTypes.fromValue(button.getType())) {
+                case URL -> buildCarouselUrlButton(template, button, variables);
+                case QUICK_REPLY -> buildCarouselQuickReplyButton(button, payload);
+                default -> null;
+            };
+            addIfNotNull(buttonComponents, btnComp);
+        }
+
+        return buttonComponents;
     }
 
-    private Component buildHeaderTextComponent(TemplateDto template, Map<String, String> parameters) {
-        // Get all HEADER texts
-        List<TemplateTextDto> headerTexts = template.getTexts().stream()
-                .filter(t -> ComponentType.HEADER.getValue().equalsIgnoreCase(t.getType()))
-                .toList();
+    private CarouselComponent buildCarouselUrlButton(
+            TemplateDto template,
+            TemplateCarouselButton button,
+            Map<String, String> variables) {
+        
+        Parameter param = template.getTexts().stream()
+                .filter(t -> "BUTTON".equalsIgnoreCase(t.getType()))
+                .map(t -> buildTextParam(variables, t.getText()))
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse(null);
 
-        if (headerTexts.isEmpty())
+        if (param == null) {
+            log.debug("Skipping URL carousel button at index {} - no runtime parameter", button.getIndex());
             return null;
-
-        List<Parameter> componentParameters = new ArrayList<>();
-        for (TemplateTextDto templateText : headerTexts) {
-            String runtimeValue = parameters.get(templateText.getText());
-            if (runtimeValue != null) {
-                componentParameters.add(buildTextParameter(runtimeValue, Parameter::new));
-            }
         }
-        if (componentParameters.isEmpty())
-            return null;
 
-        Component component = new Component();
-        component.setType(ComponentType.HEADER.getValue().toLowerCase());
-        component.setParameters(componentParameters);
+        CarouselComponent component = new CarouselComponent();
+        component.setType("button");
+        component.setSubType(button.getType().toLowerCase());
+        component.setIndex(button.getIndex());
+        component.setParameters(List.of(param));
         return component;
     }
 
-    private Component buildHeaderMediaComponent(String format, String mediaId, TemplateDto template,
-            Map<String, String> parameters) {
-        Component component = new Component();
-        component.setType(ComponentType.HEADER.getValue().toLowerCase());
-        MediaType mediaType = MediaType.fromValue(format);
-        List<Parameter> componentParameters = new ArrayList<>();
-        componentParameters.add(buildMediaParameter(mediaType, mediaId, Parameter::new));
-        component.setParameters(componentParameters);
-        return component;
+    private CarouselComponent buildCarouselQuickReplyButton(TemplateCarouselButton button, String payload) {
+        Parameter param = new Parameter();
+        param.setType("payload");
+        param.setPayload(payload);
 
+        CarouselComponent component = new CarouselComponent();
+        component.setType("button");
+        component.setSubType(button.getType().toLowerCase());
+        component.setIndex(button.getIndex());
+        component.setParameters(List.of(param));
+        return component;
     }
+
+    // ====================== BODY COMPONENT ======================
 
     private Component buildBodyComponent(TemplateDto template, Map<String, String> variables) {
         List<TemplateTextDto> bodyTexts = template.getTexts().stream()
@@ -501,14 +519,15 @@ public class TemplateBuilderServiceImpl {
                 .map(val -> buildTextParameter(val, Parameter::new))
                 .toList();
 
-        if (params.isEmpty())
-            return null;
+        if (params.isEmpty()) return null;
 
         Component component = new Component();
         component.setType(ComponentType.BODY.getValue().toLowerCase());
         component.setParameters(params);
         return component;
     }
+
+    // ====================== BUTTON COMPONENTS ======================
 
     private List<Component> buildButtonComponents(
             TemplateDto template,
@@ -518,22 +537,21 @@ public class TemplateBuilderServiceImpl {
         List<Component> buttonComponents = new ArrayList<>();
 
         for (TemplateComponentButtonDto button : templateComponent.getButtons()) {
-            switch (ButtonTypes.fromValue(button.getType())) {
-                case URL -> {
-                    Parameter param = template.getTexts().stream()
-                            .filter(t -> "BUTTON".equalsIgnoreCase(t.getType()))
-                            .map(t -> buildTextParam(variables, t.getText()))
-                            .filter(Objects::nonNull)
-                            .findFirst()
-                            .orElse(null);
-                    if (param != null) {
-                        Component component = new Component();
-                        component.setType("button");
-                        component.setSubType(button.getType().toLowerCase()); // url
-                        component.setIndex(String.valueOf(button.getIndex())); // button position
-                        component.setParameters(List.of(param));
-                        buttonComponents.add(component);
-                    }
+            if (ButtonTypes.fromValue(button.getType()) == ButtonTypes.URL) {
+                Parameter param = template.getTexts().stream()
+                        .filter(t -> "BUTTON".equalsIgnoreCase(t.getType()))
+                        .map(t -> buildTextParam(variables, t.getText()))
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse(null);
+                
+                if (param != null) {
+                    Component component = new Component();
+                    component.setType("button");
+                    component.setSubType(button.getType().toLowerCase());
+                    component.setIndex(String.valueOf(button.getIndex()));
+                    component.setParameters(List.of(param));
+                    buttonComponents.add(component);
                 }
             }
         }
@@ -541,54 +559,62 @@ public class TemplateBuilderServiceImpl {
         return buttonComponents.isEmpty() ? null : buttonComponents;
     }
 
-    // Build-Parameters=======================================================================================
+    private void addCopyCodeButtonIfPresent(
+            SendTemplateRequestDto requestDto,
+            TemplateDto template,
+            List<Component> components) {
 
-    private Language buildLanguage(String languageCode) {
-        Language lang = new Language();
-        lang.setCode(languageCode);
-        return lang;
+        if (requestDto.getCopyCode() == null) return;
+
+        template.getComponents().stream()
+                .filter(c -> ComponentType.BUTTONS.getValue().equalsIgnoreCase(c.getType()))
+                .flatMap(c -> c.getButtons().stream())
+                .filter(b -> ButtonTypes.COPY_CODE.getValue().equalsIgnoreCase(b.getType()))
+                .findFirst()
+                .ifPresent(button -> {
+                    Component couponButton = new Component();
+                    couponButton.setType("button");
+                    couponButton.setSubType(button.getType().toLowerCase());
+                    couponButton.setIndex(String.valueOf(button.getIndex()));
+                    
+                    Parameter param = new Parameter();
+                    param.setType("coupon_code");
+                    param.setCouponCode(requestDto.getCopyCode());
+                    couponButton.setParameters(List.of(param));
+                    
+                    components.add(couponButton);
+                });
     }
 
-    private <T extends TextParameter> T buildTextParameter(String text, Supplier<T> supplier) {
-        T param = supplier.get();
-        param.setType("text");
-        param.setText(text);
-        return param;
-    }
+    // ====================== LIMITED TIME OFFER ======================
 
-    private Parameter buildCarouselTextParam(Map<String, String> parameters, String key) {
-        if (parameters.containsKey(key)) {
-            Parameter param = new Parameter();
-            param.setType("text");
-            param.setText(parameters.get(key));
-            return param;
+    private Component buildLimitedTimeOfferComponent(SendTemplateRequestDto requestDto) {
+        if (requestDto.getExpirationTimeMs() == null) {
+            throw new IllegalArgumentException("expiration_time_ms required for LTO templates");
         }
-        return null;
+
+        Component component = new Component();
+        component.setType(ComponentType.LIMITED_TIME_OFFER.getValue().toLowerCase());
+        component.setParameters(List.of(buildLimitedTimeOfferParam(requestDto.getExpirationTimeMs())));
+        return component;
     }
 
-    private Parameter buildCarouselQuickReplyParam(String payload) {
+    // ====================== PARAMETER BUILDERS ======================
+
+    /**
+     * Builds media parameter with fallback logic:
+     * - If mediaId is provided, uses 'id' field
+     * - If only URL is available, uses 'link' field
+     */
+    private Parameter buildMediaParameterWithFallback(MediaType mediaType, String mediaId, String mediaUrl) {
+        if (mediaId == null && mediaUrl == null) {
+            return null;
+        }
+
         Parameter param = new Parameter();
-        param.setType("payload");
-        param.setPayload(payload);
-        return param;
-    }
-
-    private Parameter buildProductParameter(String catalogueId,
-            String productRetailerId) {
-        Parameter parameter = new Parameter();
-        Product product = new Product();
-        product.setCatalogId(catalogueId);
-        product.setProductRetailerId(productRetailerId);
-        parameter.setProduct(product);
-        return parameter;
-    }
-
-    private <T extends MediaParameter> T buildMediaParameter(MediaType mediaType, String mediaId,
-            Supplier<T> supplier) {
-        T param = supplier.get();
         param.setType(mediaType.getValue().toLowerCase());
 
-        Media mediaDto = createMediaDto(mediaType, mediaId);
+        Media mediaDto = createMediaDtoWithFallback(mediaType, mediaId, mediaUrl);
 
         switch (mediaType) {
             case DOCUMENT -> param.setDocument((Document) mediaDto);
@@ -596,26 +622,40 @@ public class TemplateBuilderServiceImpl {
             case VIDEO -> param.setVideo((Video) mediaDto);
             default -> throw new InvalidMediaType("Unsupported media type: " + mediaType);
         }
+
         return param;
     }
 
-    private Media createMediaDto(MediaType mediaType, String mediaId) {
-        Media mediaDto;
-        switch (mediaType) {
-            case DOCUMENT -> mediaDto = new Document();
-            case IMAGE -> mediaDto = new Image();
-            case VIDEO -> mediaDto = new Video();
+    /**
+     * Creates Media DTO with appropriate field set:
+     * - 'id' field when mediaId is available (uploaded media)
+     * - 'link' field when only URL is available (external URL)
+     */
+    private Media createMediaDtoWithFallback(MediaType mediaType, String mediaId, String mediaUrl) {
+        Media mediaDto = switch (mediaType) {
+            case DOCUMENT -> new Document();
+            case IMAGE -> new Image();
+            case VIDEO -> new Video();
             default -> throw new InvalidMediaType("Unsupported media type: " + mediaType);
+        };
+
+        // Priority: mediaId (uploaded) > mediaUrl (link)
+        if (mediaId != null && !mediaId.isBlank()) {
+            mediaDto.setId(mediaId);
+            log.debug("Using media ID: {}", mediaId);
+        } else if (mediaUrl != null && !mediaUrl.isBlank()) {
+            mediaDto.setLink(mediaUrl);
+            log.debug("Using media URL: {}", mediaUrl);
         }
-        mediaDto.setId(mediaId);
+
         return mediaDto;
     }
 
-    private Parameter buildLimitedTimeOfferParam(Long expirationTime) {
-        Parameter p = new Parameter();
-        p.setType(ComponentType.LIMITED_TIME_OFFER.getValue().toLowerCase());
-        p.setLimitedTimeOffer(new LimitedTimeOffer(expirationTime));
-        return p;
+    private <T extends TextParameter> T buildTextParameter(String text, Supplier<T> supplier) {
+        T param = supplier.get();
+        param.setType("text");
+        param.setText(text);
+        return param;
     }
 
     private Parameter buildTextParam(Map<String, String> parameters, String key) {
@@ -628,21 +668,38 @@ public class TemplateBuilderServiceImpl {
         return null;
     }
 
-    /*
-     * Used ot fetch contacts varaibles from phonebook only if it fully not
-     * paramatereized from frontend means it need data from database
-     */
+    private Parameter buildProductParameter(String catalogueId, String productRetailerId) {
+        Parameter parameter = new Parameter();
+        parameter.setType("product");
+        
+        Product product = new Product();
+        product.setCatalogId(catalogueId);
+        product.setProductRetailerId(productRetailerId);
+        parameter.setProduct(product);
+        
+        return parameter;
+    }
+
+    private Parameter buildLimitedTimeOfferParam(Long expirationTime) {
+        Parameter p = new Parameter();
+        p.setType(ComponentType.LIMITED_TIME_OFFER.getValue().toLowerCase());
+        p.setLimitedTimeOffer(new LimitedTimeOffer(expirationTime));
+        return p;
+    }
+
+    // ====================== PHONE BOOK PARAMETERS ======================
+
     private PhoneBookResponseDto buildParameters(
-            SendTemplateRequestDto SendTemplateRequestDto,
+            SendTemplateRequestDto requestDto,
             List<String> filteredMobileNumbers,
             TemplateDto template,
             Long userId,
             String defaultValue) {
-        if (SendTemplateRequestDto.isFullyPrameterized()) {
-            Map<String, String> sharedParams = Optional.ofNullable(SendTemplateRequestDto.getParameters())
+        
+        if (requestDto.isFullyPrameterized()) {
+            Map<String, String> sharedParams = Optional.ofNullable(requestDto.getParameters())
                     .orElseGet(Map::of);
 
-            // Build data map for DTO
             Map<String, Map<String, String>> data = filteredMobileNumbers.stream()
                     .collect(Collectors.toMap(
                             number -> number,
@@ -652,7 +709,6 @@ public class TemplateBuilderServiceImpl {
             dto.setData(data);
             return dto;
         } else {
-            // In partial case we hit database and then override values from frontend
             List<String> keys = template.getTexts().stream()
                     .map(TemplateTextDto::getText)
                     .toList();
@@ -660,23 +716,21 @@ public class TemplateBuilderServiceImpl {
             PhoneBookResponseDto parameters = phoneBookEntryService
                     .getParamsForPhoneNumbers(filteredMobileNumbers, keys, userId, defaultValue);
 
-            if (SendTemplateRequestDto.getParameters() != null) {
-                parameters.getData().values().forEach(map -> map.putAll(SendTemplateRequestDto.getParameters()));
+            if (requestDto.getParameters() != null) {
+                parameters.getData().values().forEach(map -> map.putAll(requestDto.getParameters()));
             }
 
             return parameters;
         }
     }
 
+    // ====================== UTILITY METHODS ======================
+
     private <T> void addIfNotNull(List<T> list, T element) {
-        if (element != null)
-            list.add(element);
+        if (element != null) list.add(element);
     }
 
     private <T> void addAllIfNotEmpty(List<T> list, List<T> elements) {
-        if (elements != null && !elements.isEmpty())
-            list.addAll(elements);
-
+        if (elements != null && !elements.isEmpty()) list.addAll(elements);
     }
-
 }

@@ -66,7 +66,7 @@ public class ReportController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         
-        Long userId = 1L; // TODO: Get from authentication context
+        Long userId = 1L; 
         
         log.info("Fetching reports for userId: {}", userId);
         
@@ -119,7 +119,7 @@ public class ReportController {
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime startDate,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime endDate) {
         
-        Long userId = 1L; // TODO: Get from authentication context
+        Long userId = 1L; 
         
         log.info("Fetching reports between {} and {}", startDate, endDate);
         
@@ -133,7 +133,7 @@ public class ReportController {
 
     @GetMapping("/mobile/{mobile}")
     public ResponseEntity<?> getReportsByMobile(@PathVariable String mobile) {
-        Long userId = 1L; // TODO: Get from authentication context
+        Long userId = 1L; 
         
         log.info("Fetching reports for mobile: {}", mobile);
         
