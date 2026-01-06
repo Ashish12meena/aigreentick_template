@@ -181,10 +181,9 @@ public class TemplateMapper {
                 .index(button.getButtonIndex())
                 .autofillText(button.getAutofillText())
                 .example(button.getExample())
-                .supportedApps(button.getSupportedApps() != null ? 
-                        button.getSupportedApps().stream()
-                                .map(this::toSupportedApp)
-                                .collect(Collectors.toList()) : null)
+                .supportedApps(button.getSupportedApps() != null ? button.getSupportedApps().stream()
+                        .map(this::toSupportedApp)
+                        .collect(Collectors.toList()) : null)
                 .build();
     }
 
@@ -206,8 +205,8 @@ public class TemplateMapper {
         if (card.getMediaType() != null || card.getImageUrl() != null || card.getHeader() != null) {
             TemplateCarouselCardComponent header = new TemplateCarouselCardComponent();
             header.setType("HEADER");
-            header.setFormat(card.getMediaType() != null ? 
-                    MediaFormat.fromValue(card.getMediaType()).toString() : MediaFormat.IMAGE.toString());
+            header.setFormat(card.getMediaType() != null ? MediaFormat.fromValue(card.getMediaType()).toString()
+                    : MediaFormat.IMAGE.toString());
 
             // Build example
             TemplateCarouselExample example = new TemplateCarouselExample();
@@ -260,8 +259,9 @@ public class TemplateMapper {
         dto.setText(text.getText());
         return dto;
     }
-    private SupportedAppDto toSupportedApp(SupportedApp supportedApp){
-        SupportedAppDto dto = new  SupportedAppDto();
+
+    private SupportedAppDto toSupportedApp(SupportedApp supportedApp) {
+        SupportedAppDto dto = new SupportedAppDto();
         dto.setPackageName(supportedApp.getPackageName());
         dto.setSignatureHash(supportedApp.getSignatureHash());
         return dto;
@@ -272,9 +272,9 @@ public class TemplateMapper {
 
         // Extract header examples if applicable
         if ("HEADER".equalsIgnoreCase(component.getType())) {
-            if ("IMAGE".equalsIgnoreCase(component.getFormat()) || 
-                "VIDEO".equalsIgnoreCase(component.getFormat()) ||
-                "DOCUMENT".equalsIgnoreCase(component.getFormat())) {
+            if ("IMAGE".equalsIgnoreCase(component.getFormat()) ||
+                    "VIDEO".equalsIgnoreCase(component.getFormat()) ||
+                    "DOCUMENT".equalsIgnoreCase(component.getFormat())) {
                 if (component.getImageUrl() != null) {
                     example.setHeaderHandle(List.of(component.getImageUrl()));
                 }
@@ -305,7 +305,7 @@ public class TemplateMapper {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-         // Auto-generate button indices
+        // Auto-generate button indices
         if (req.getButtons() != null) {
             AtomicInteger buttonIndex = new AtomicInteger(0);
             for (TemplateComponentButtonRequest btnReq : req.getButtons()) {
@@ -323,14 +323,14 @@ public class TemplateMapper {
         return comp;
     }
 
-    private TemplateComponentButton toButton(TemplateComponentButtonRequest req,int index) {
+    private TemplateComponentButton toButton(TemplateComponentButtonRequest req, int index) {
         TemplateComponentButton btn = TemplateComponentButton.builder()
                 .type(req.getType() != null ? req.getType().getValue() : null)
                 .otpType(req.getOtpType())
                 .number(req.getPhoneNumber())
                 .text(req.getText())
                 .url(req.getUrl())
-                .buttonIndex(index)  // Use auto-generated index
+                .buttonIndex(index) // Use auto-generated index
                 .autofillText(req.getAutofillText())
                 .example(req.getExample())
                 .createdAt(LocalDateTime.now())
@@ -420,5 +420,13 @@ public class TemplateMapper {
         req.setPackageName(app.getPackageName());
         req.setSignatureHash(app.getSignatureHash());
         return req;
+    }
+
+    public TemplateResponseDto mapToTemplateResponse(String templateId, String status, String category) {
+        return TemplateResponseDto.builder()
+                .metaTemplateId(templateId)
+                .status(status)
+                .category(category)
+                .build();
     }
 }

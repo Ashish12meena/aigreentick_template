@@ -33,7 +33,7 @@ public class TemplateRequest {
 
     private List<TemplateComponentRequest> components;
 
-    private List<TemplateTextRequest> texts;
+    // private List<TemplateTextRequest> texts;
 
     private String response;
 

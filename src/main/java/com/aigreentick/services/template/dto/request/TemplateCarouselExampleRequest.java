@@ -7,8 +7,8 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import lombok.Data;
 
 @Data
-@JsonInclude(JsonInclude.Include.NON_NULL) 
+@JsonInclude(JsonInclude.Include.NON_NULL)
 public class TemplateCarouselExampleRequest {
-     private List<String> headerHandle;
+    private List<String> headerHandle;
     private List<String> headerText;
 }

@@ -42,10 +42,10 @@ public class TemplateOrchestratorServiceImpl {
     private final UserService userService;
 
 
-    public TemplateResponseDto createTemplate(CreateTemplateResponseDto request, Long userId) {
+    public TemplateResponseDto createTemplate(TemplateRequest templateRequest, Long userId) {
         log.info("Creating template for userId: {}", userId);
 
-        TemplateRequest templateRequest = request.getTemplate();
+        // TemplateRequest templateRequest = request.getTemplate();
 
         // Check for duplicate
         templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), userId);
@@ -83,16 +83,16 @@ public class TemplateOrchestratorServiceImpl {
         String data = serializeToString(jsonData);
 
         // Map and save template
-        Template template = templateMapper.toTemplateEntity(request, userId);
-        template.setWaId(templateId); // Store the Facebook template ID
-        template.setStatus(status);
-        template.setPayload(jsonRequest);
-        template.setCategory(category);
-        template.setResponse(data);
+        // Template template = templateMapper.toTemplateEntity(request, userId);
+        // template.setWaId(templateId); // Store the Facebook template ID
+        // template.setStatus(status);
+        // template.setPayload(jsonRequest);
+        // template.setCategory(category);
+        // template.setResponse(data);
 
-        templateServiceImpl.save(template);
+        // templateServiceImpl.save(template);
 
-        return templateMapper.mapToTemplateResponse(template);
+        return templateMapper.mapToTemplateResponse(templateId,status,category);
     }
 
     @Transactional

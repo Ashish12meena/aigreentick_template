@@ -11,7 +11,7 @@ import org.springframework.stereotype.Repository;
 import com.aigreentick.services.template.model.ChatContacts;
 
 @Repository
-public interface ChatContactsRepository extends JpaRepository<ChatContacts, Long> {
+public interface ChatContactsRepository extends JpaRepository<ChatContacts, Integer> {
     
     /**
      * Find all contacts for a user by mobile numbers (excluding deleted).
