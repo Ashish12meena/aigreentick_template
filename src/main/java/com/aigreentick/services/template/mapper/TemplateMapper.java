@@ -402,6 +402,7 @@ public class TemplateMapper {
                 .text(req.getText())
                 .isCarousel(req.isCarousel())
                 .textIndex(req.getTextIndex())
+                .cardIndex(req.getCardIndex())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();

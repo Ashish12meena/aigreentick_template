@@ -99,7 +99,7 @@ public class TemplateBuilderServiceImpl {
                 .map(number -> buildAuthenticationSendTemplate(number, template, requestDto))
                 .collect(Collectors.toList());
     }
- 
+
     public MessageRequest buildAuthenticationSendTemplate(
             String phoneNumber,
             TemplateDto template,
@@ -205,10 +205,10 @@ public class TemplateBuilderServiceImpl {
 
         // debug log of payload
         // try {
-        //     log.debug("Built marketing payload for {}: {}", phoneNumber,
-        //             JsonUtils.serializeToString(messageRequest));
+        // log.debug("Built marketing payload for {}: {}", phoneNumber,
+        // JsonUtils.serializeToString(messageRequest));
         // } catch (Exception e) {
-        //     log.debug("Could not serialize payload for debug logging", e);
+        // log.debug("Could not serialize payload for debug logging", e);
         // }
 
         return messageRequest;
@@ -229,7 +229,9 @@ public class TemplateBuilderServiceImpl {
             throw new CarouselConfigurationException("Carousel supports max " + MAX_CARDS + " cards");
         }
 
-        Queue<String> productRetailerIds = new ConcurrentLinkedQueue<>(requestDto.getProductRetailerIds());
+        Queue<String> productRetailerIds = new ConcurrentLinkedQueue<>(
+                Optional.ofNullable(requestDto.getProductRetailerIds())
+                        .orElse(Collections.emptyList()));
         Queue<String> mediaIds = new ConcurrentLinkedQueue<>(
                 Optional.ofNullable(requestDto.getMediaIdsForCarosel()).orElse(Collections.emptyList()));
 
@@ -674,7 +676,7 @@ public class TemplateBuilderServiceImpl {
     private <T> void addAllIfNotEmpty(List<T> list, List<T> elements) {
         if (elements != null && !elements.isEmpty())
             list.addAll(elements);
-        
+
     }
 
 }
