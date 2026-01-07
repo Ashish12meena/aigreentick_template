@@ -8,4 +8,5 @@ import lombok.Data;
 public class TemplateCarouselExample {
     private List<String> headerHandle;
     private List<String> headerText;
+    List<List<String>> bodyText;
 }

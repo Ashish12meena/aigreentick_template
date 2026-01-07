@@ -11,4 +11,5 @@ import lombok.Data;
 public class TemplateCarouselExampleRequest {
     private List<String> headerHandle;
     private List<String> headerText;
+    List<List<String>> bodyText;
 }
