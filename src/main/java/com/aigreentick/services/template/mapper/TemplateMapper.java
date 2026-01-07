@@ -265,7 +265,7 @@ public class TemplateMapper {
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
             for (int i = 0; i < example.getHeaderText().size(); i++) {
-                template.addText(buildTemplateText("CAROUSEL_HEADER", example.getHeaderText().get(i), i, true, cardIndex));
+                template.addText(buildTemplateText("HEADER", example.getHeaderText().get(i), i, true, cardIndex));
             }
         }
     }
@@ -281,7 +281,7 @@ public class TemplateMapper {
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
             List<String> bodyTexts = example.getBodyText().get(0);
             for (int i = 0; i < bodyTexts.size(); i++) {
-                template.addText(buildTemplateText("CAROUSEL_BODY", bodyTexts.get(i), i, true, cardIndex));
+                template.addText(buildTemplateText("_BODY", bodyTexts.get(i), i, true, cardIndex));
             }
         }
     }
