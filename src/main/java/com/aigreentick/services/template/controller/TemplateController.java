@@ -2,6 +2,7 @@ package com.aigreentick.services.template.controller;
 
 import org.springframework.data.domain.Page;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -36,6 +37,18 @@ public class TemplateController {
                         ResponseStatus.SUCCESS.name(),
                         TemplateConstants.Messages.TEMPLATES_FETCHED,
                         response));
+
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<?> deleteTemplate(@PathVariable Long id) {
+        templateService.deleteTemplateById(id);
+
+        return ResponseEntity.ok(
+                new ResponseMessage<>(
+                        ResponseStatus.SUCCESS.name(),
+                        "Template deleted",
+                        null));
 
     }
 

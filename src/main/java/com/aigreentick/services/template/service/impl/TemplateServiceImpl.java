@@ -166,4 +166,8 @@ public class TemplateServiceImpl {
             return null;
         }
     }
+
+    public void deleteTemplateById(Long id) {
+        templateRepository.deleteById(id);
+    }
 }
