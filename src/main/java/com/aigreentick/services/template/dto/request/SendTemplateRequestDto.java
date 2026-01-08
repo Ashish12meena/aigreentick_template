@@ -20,7 +20,7 @@ public class SendTemplateRequestDto {
     // private String templateType;
     private boolean isFullyPrameterized;
     private String defaultValue;
-    private Map<String, String> parameters;
+    private Map<String, String> parameters; 
     private Long expirationTimeMs;
     private Boolean isMedia;
     private long mediaId;
