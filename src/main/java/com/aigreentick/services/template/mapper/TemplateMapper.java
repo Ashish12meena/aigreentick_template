@@ -8,29 +8,43 @@ import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
-import com.aigreentick.services.template.dto.build.*;
+import com.aigreentick.services.template.dto.build.SupportedAppDto;
+import com.aigreentick.services.template.dto.build.TemplateCarouselButton;
+import com.aigreentick.services.template.dto.build.TemplateCarouselCardComponent;
+import com.aigreentick.services.template.dto.build.TemplateCarouselExample;
+import com.aigreentick.services.template.dto.build.TemplateComponentButtonDto;
+import com.aigreentick.services.template.dto.build.TemplateComponentCardsDto;
+import com.aigreentick.services.template.dto.build.TemplateComponentDto;
+import com.aigreentick.services.template.dto.build.TemplateDto;
+import com.aigreentick.services.template.dto.build.TemplateExampleDto;
 import com.aigreentick.services.template.dto.build.TemplateTextDto;
-import com.aigreentick.services.template.dto.request.*;
+import com.aigreentick.services.template.dto.request.CreateTemplateResponseDto;
+import com.aigreentick.services.template.dto.request.SupportedAppRequest;
+import com.aigreentick.services.template.dto.request.TemplateCarouselButtonRequest;
+import com.aigreentick.services.template.dto.request.TemplateCarouselCardComponentRequest;
+import com.aigreentick.services.template.dto.request.TemplateCarouselExampleRequest;
+import com.aigreentick.services.template.dto.request.TemplateComponentButtonRequest;
+import com.aigreentick.services.template.dto.request.TemplateComponentCardsRequest;
+import com.aigreentick.services.template.dto.request.TemplateComponentRequest;
+import com.aigreentick.services.template.dto.request.TemplateExampleRequest;
+import com.aigreentick.services.template.dto.request.TemplateRequest;
+import com.aigreentick.services.template.dto.request.TemplateTextRequest;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.enums.MediaFormat;
-import com.aigreentick.services.template.model.*;
+import com.aigreentick.services.template.model.SupportedApp;
+import com.aigreentick.services.template.model.Template;
+import com.aigreentick.services.template.model.TemplateCarouselCard;
+import com.aigreentick.services.template.model.TemplateCarouselCardButton;
+import com.aigreentick.services.template.model.TemplateComponent;
+import com.aigreentick.services.template.model.TemplateComponentButton;
+import com.aigreentick.services.template.model.TemplateText;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
-/**
- * TemplateMapper handles all conversions between:
- * 1. Facebook API responses -> Template Entity (sync flow)
- * 2. Create requests -> Template Entity (create flow)
- * 3. Template Entity -> TemplateDto (send flow)
- * 4. Template Entity -> Response DTOs (API responses)
- * 
- * Text variables are stored in TemplateText for building sendable payloads.
- * Parameters are stored in respective entities for data preservation.
- */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -40,9 +54,6 @@ public class TemplateMapper {
 
     // ==================== PUBLIC API - RESPONSE MAPPING ====================
 
-    /**
-     * Converts Template entity to API response DTO.
-     */
     public TemplateResponseDto mapToTemplateResponse(Template template) {
         return TemplateResponseDto.builder()
                 .id(template.getId())
@@ -54,9 +65,6 @@ public class TemplateMapper {
                 .build();
     }
 
-    /**
-     * Creates response DTO from individual fields.
-     */
     public TemplateResponseDto mapToTemplateResponse(String templateId, String status, String category) {
         return TemplateResponseDto.builder()
                 .metaTemplateId(templateId)
@@ -67,22 +75,14 @@ public class TemplateMapper {
 
     // ==================== PUBLIC API - FACEBOOK TO ENTITY ====================
 
-    /**
-     * Maps Facebook API template response to Template entity.
-     * Used during sync operations.
-     * 
-     * Flow: Facebook Response -> TemplateRequest -> Template Entity
-     */
     public Template fromFacebookTemplate(TemplateRequest fbTemplate, Long userId, String wabaId) {
         Template template = buildBaseTemplate(fbTemplate, userId);
 
         if (fbTemplate.getComponents() != null) {
-            // Pass 1: Map components to entities
             for (TemplateComponentRequest compReq : fbTemplate.getComponents()) {
                 template.addComponent(mapToComponentEntity(compReq));
             }
 
-            // Pass 2: Extract text variables for payload building
             extractAllTextVariables(fbTemplate.getComponents(), template);
         }
 
@@ -91,27 +91,18 @@ public class TemplateMapper {
 
     // ==================== PUBLIC API - REQUEST TO ENTITY ====================
 
-    /**
-     * Maps CreateTemplateResponseDto to Template entity.
-     * Used during template creation flow.
-     * 
-     * Flow: Create Request -> Template Entity
-     */
     public Template toTemplateEntity(CreateTemplateResponseDto request, Long userId) {
         TemplateRequest req = request.getTemplate();
         Template template = buildBaseTemplate(req, userId);
 
         if (req.getComponents() != null) {
-            // Pass 1: Map components
             for (TemplateComponentRequest compReq : req.getComponents()) {
                 template.addComponent(mapToComponentEntity(compReq));
             }
 
-            // Pass 2: Extract text variables
             extractAllTextVariables(req.getComponents(), template);
         }
 
-        // Pass 3: Add manually provided variables (if any)
         if (request.getVariables() != null) {
             for (TemplateTextRequest textReq : request.getVariables()) {
                 template.addText(mapToTextEntity(textReq));
@@ -123,12 +114,6 @@ public class TemplateMapper {
 
     // ==================== PUBLIC API - ENTITY TO DTO (FOR SENDING) ====================
 
-    /**
-     * Converts Template entity to TemplateDto for building sendable templates.
-     * Used by TemplateBuilderServiceImpl.
-     * 
-     * Flow: Template Entity -> TemplateDto -> MessageRequest
-     */
     public TemplateDto toTemplateDto(Template template) {
         TemplateDto dto = new TemplateDto();
         dto.setId(template.getId().toString());
@@ -155,10 +140,6 @@ public class TemplateMapper {
 
     // ==================== TEXT VARIABLE EXTRACTION ====================
 
-    /**
-     * Extracts all text variables from components into TemplateText entries.
-     * Handles both regular and carousel components.
-     */
     private void extractAllTextVariables(List<TemplateComponentRequest> components, Template template) {
         if (components == null) return;
 
@@ -173,9 +154,6 @@ public class TemplateMapper {
         }
     }
 
-    /**
-     * Extracts HEADER, BODY, BUTTON text variables from non-carousel components.
-     */
     private void extractRegularTextVariables(TemplateComponentRequest component, Template template) {
         ComponentType type = component.getType();
         TemplateExampleRequest example = component.getExample();
@@ -188,36 +166,28 @@ public class TemplateMapper {
         }
     }
 
-    /**
-     * Extracts header text variables from example.headerText.
-     */
     private void extractHeaderTextVariables(TemplateExampleRequest example, Template template) {
         if (example == null || example.getHeaderText() == null) return;
 
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
-            template.addText(buildTemplateText("HEADER", headerTexts.get(i), i, false, null));
+            String variableKey = "{{" + (i + 1) + "}}";
+            template.addText(buildTemplateText("HEADER", variableKey, i, false, null, null));
         }
         log.debug("Extracted {} HEADER text variables", headerTexts.size());
     }
 
-    /**
-     * Extracts body text variables from example.bodyText.
-     * Facebook structure: body_text is List<List<String>> - first inner list contains values.
-     */
     private void extractBodyTextVariables(TemplateExampleRequest example, Template template) {
         if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty()) return;
 
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
-            template.addText(buildTemplateText("BODY", bodyTexts.get(i), i, false, null));
+            String variableKey = "{{" + (i + 1) + "}}";
+            template.addText(buildTemplateText("BODY", variableKey, i, false, null, null));
         }
         log.debug("Extracted {} BODY text variables", bodyTexts.size());
     }
 
-    /**
-     * Extracts button text variables (URL button dynamic suffixes).
-     */
     private void extractButtonTextVariables(List<TemplateComponentButtonRequest> buttons, Template template) {
         if (buttons == null) return;
 
@@ -226,15 +196,14 @@ public class TemplateMapper {
 
             int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
             for (int i = 0; i < btn.getExample().size(); i++) {
-                template.addText(buildTemplateText("BUTTON", btn.getExample().get(i), buttonIndex, false, null));
+                String variableKey = "{{" + (i + 1) + "}}";
+                template.addText(buildTemplateText("BUTTON", variableKey, buttonIndex, false, null, null));
             }
-            log.debug("Extracted {} BUTTON text variables for button index {}", btn.getExample().size(), buttonIndex);
+            log.debug("Extracted {} BUTTON text variables for button index {}",
+                    btn.getExample().size(), buttonIndex);
         }
     }
 
-    /**
-     * Extracts text variables from carousel cards.
-     */
     private void extractCarouselTextVariables(TemplateComponentRequest component, Template template) {
         if (component.getCards() == null) return;
 
@@ -255,25 +224,20 @@ public class TemplateMapper {
         }
     }
 
-    /**
-     * Extracts carousel card header text variables.
-     */
-    private void extractCarouselHeaderTexts(TemplateCarouselCardComponentRequest cardComp, 
+    private void extractCarouselHeaderTexts(TemplateCarouselCardComponentRequest cardComp,
                                             int cardIndex, Template template) {
         if (cardComp.getExample() == null) return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
             for (int i = 0; i < example.getHeaderText().size(); i++) {
-                template.addText(buildTemplateText("HEADER", example.getHeaderText().get(i), i, true, cardIndex));
+                String variableKey = "{{" + (i + 1) + "}}";
+                template.addText(buildTemplateText("HEADER", variableKey, i, true, cardIndex, null));
             }
         }
     }
 
-    /**
-     * Extracts carousel card body text variables.
-     */
-    private void extractCarouselBodyTexts(TemplateCarouselCardComponentRequest cardComp, 
+    private void extractCarouselBodyTexts(TemplateCarouselCardComponentRequest cardComp,
                                           int cardIndex, Template template) {
         if (cardComp.getExample() == null) return;
 
@@ -281,15 +245,13 @@ public class TemplateMapper {
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
             List<String> bodyTexts = example.getBodyText().get(0);
             for (int i = 0; i < bodyTexts.size(); i++) {
-                template.addText(buildTemplateText("_BODY", bodyTexts.get(i), i, true, cardIndex));
+                String variableKey = "{{" + (i + 1) + "}}";
+                template.addText(buildTemplateText("BODY", variableKey, i, true, cardIndex, null));
             }
         }
     }
 
-    /**
-     * Extracts carousel card button text variables.
-     */
-    private void extractCarouselButtonTexts(TemplateCarouselCardComponentRequest cardComp, 
+    private void extractCarouselButtonTexts(TemplateCarouselCardComponentRequest cardComp,
                                             int cardIndex, Template template) {
         if (cardComp.getButtons() == null) return;
 
@@ -298,16 +260,14 @@ public class TemplateMapper {
 
             int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
             for (int i = 0; i < btn.getExample().size(); i++) {
-                template.addText(buildTemplateText("BUTTON", btn.getExample().get(i), buttonIndex, true, cardIndex));
+                String variableKey = "{{" + (i + 1) + "}}";
+                template.addText(buildTemplateText("BUTTON", variableKey, buttonIndex, true, cardIndex, null));
             }
         }
     }
 
     // ==================== ENTITY BUILDERS ====================
 
-    /**
-     * Builds base Template entity without components.
-     */
     private Template buildBaseTemplate(TemplateRequest req, Long userId) {
         return Template.builder()
                 .userId(userId)
@@ -322,17 +282,15 @@ public class TemplateMapper {
                 .build();
     }
 
-    /**
-     * Builds TemplateText entity.
-     */
-    private TemplateText buildTemplateText(String type, String text, int textIndex, 
-                                           boolean isCarousel, Integer cardIndex) {
+    private TemplateText buildTemplateText(String type, String text, int textIndex,
+                                           boolean isCarousel, Integer cardIndex, String defaultValue) {
         return TemplateText.builder()
                 .type(type)
                 .text(text)
                 .textIndex(textIndex)
                 .isCarousel(isCarousel)
                 .cardIndex(cardIndex)
+                .defaultValue(defaultValue)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -340,9 +298,6 @@ public class TemplateMapper {
 
     // ==================== REQUEST TO ENTITY MAPPING ====================
 
-    /**
-     * Maps TemplateComponentRequest to TemplateComponent entity.
-     */
     private TemplateComponent mapToComponentEntity(TemplateComponentRequest req) {
         TemplateComponent comp = TemplateComponent.builder()
                 .type(req.getType() != null ? req.getType().toString() : null)
@@ -355,7 +310,6 @@ public class TemplateMapper {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        // Map buttons with auto-generated indices
         if (req.getButtons() != null) {
             AtomicInteger btnIndex = new AtomicInteger(0);
             for (TemplateComponentButtonRequest btnReq : req.getButtons()) {
@@ -364,7 +318,6 @@ public class TemplateMapper {
             }
         }
 
-        // Map carousel cards
         if (req.getCards() != null) {
             AtomicInteger cardIndex = new AtomicInteger(0);
             for (TemplateComponentCardsRequest cardReq : req.getCards()) {
@@ -376,9 +329,6 @@ public class TemplateMapper {
         return comp;
     }
 
-    /**
-     * Maps button request to TemplateComponentButton entity.
-     */
     private TemplateComponentButton mapToButtonEntity(TemplateComponentButtonRequest req, int index) {
         TemplateComponentButton btn = TemplateComponentButton.builder()
                 .type(req.getType() != null ? req.getType().getValue() : null)
@@ -393,7 +343,6 @@ public class TemplateMapper {
                 .updatedAt(LocalDateTime.now())
                 .build();
 
-        // Map supported apps for OTP buttons
         if (req.getSupportedApps() != null) {
             for (SupportedAppRequest appReq : req.getSupportedApps()) {
                 btn.addSupportedApp(mapToSupportedAppEntity(appReq));
@@ -403,9 +352,6 @@ public class TemplateMapper {
         return btn;
     }
 
-    /**
-     * Maps carousel card request to TemplateCarouselCard entity.
-     */
     private TemplateCarouselCard mapToCarouselCardEntity(TemplateComponentCardsRequest req, int index) {
         TemplateCarouselCard card = TemplateCarouselCard.builder()
                 .cardIndex(index)
@@ -421,7 +367,6 @@ public class TemplateMapper {
             }
         }
 
-        // Store collected parameters as JSON
         if (!allParameters.isEmpty()) {
             card.setParameters(serializeToJson(allParameters));
         }
@@ -429,9 +374,6 @@ public class TemplateMapper {
         return card;
     }
 
-    /**
-     * Processes individual carousel card component and populates card entity.
-     */
     private void processCarouselCardComponent(TemplateCarouselCardComponentRequest compReq,
                                               TemplateCarouselCard card, List<String> allParameters) {
         String type = compReq.getType().toUpperCase();
@@ -442,12 +384,10 @@ public class TemplateMapper {
                 card.setHeader(compReq.getText());
 
                 if (compReq.getExample() != null) {
-                    // Media URL from headerHandle
-                    if (compReq.getExample().getHeaderHandle() != null 
+                    if (compReq.getExample().getHeaderHandle() != null
                             && !compReq.getExample().getHeaderHandle().isEmpty()) {
                         card.setImageUrl(compReq.getExample().getHeaderHandle().get(0));
                     }
-                    // Header text parameters
                     if (compReq.getExample().getHeaderText() != null) {
                         allParameters.addAll(compReq.getExample().getHeaderText());
                     }
@@ -456,8 +396,8 @@ public class TemplateMapper {
             case "BODY" -> {
                 card.setBody(compReq.getText());
 
-                if (compReq.getExample() != null 
-                        && compReq.getExample().getBodyText() != null 
+                if (compReq.getExample() != null
+                        && compReq.getExample().getBodyText() != null
                         && !compReq.getExample().getBodyText().isEmpty()) {
                     allParameters.addAll(compReq.getExample().getBodyText().get(0));
                 }
@@ -472,9 +412,6 @@ public class TemplateMapper {
         }
     }
 
-    /**
-     * Maps carousel button request to entity.
-     */
     private TemplateCarouselCardButton mapToCarouselButtonEntity(TemplateCarouselButtonRequest req) {
         return TemplateCarouselCardButton.builder()
                 .type(req.getType() != null ? req.getType().getValue() : null)
@@ -488,9 +425,6 @@ public class TemplateMapper {
                 .build();
     }
 
-    /**
-     * Maps TemplateTextRequest to entity.
-     */
     private TemplateText mapToTextEntity(TemplateTextRequest req) {
         return TemplateText.builder()
                 .type(req.getType())
@@ -498,14 +432,12 @@ public class TemplateMapper {
                 .isCarousel(req.isCarousel())
                 .textIndex(req.getTextIndex())
                 .cardIndex(req.getCardIndex())
+                .defaultValue(null)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
     }
 
-    /**
-     * Maps SupportedAppRequest to entity.
-     */
     private SupportedApp mapToSupportedAppEntity(SupportedAppRequest req) {
         return SupportedApp.builder()
                 .packageName(req.getPackageName())
@@ -515,9 +447,6 @@ public class TemplateMapper {
 
     // ==================== ENTITY TO DTO MAPPING ====================
 
-    /**
-     * Maps TemplateComponent entity to DTO.
-     */
     private TemplateComponentDto mapToComponentDto(TemplateComponent component) {
         TemplateComponentDto.TemplateComponentDtoBuilder builder = TemplateComponentDto.builder()
                 .type(component.getType())
@@ -545,9 +474,6 @@ public class TemplateMapper {
         return builder.build();
     }
 
-    /**
-     * Maps button entity to DTO.
-     */
     private TemplateComponentButtonDto mapToButtonDto(TemplateComponentButton button) {
         return TemplateComponentButtonDto.builder()
                 .type(button.getType())
@@ -558,15 +484,12 @@ public class TemplateMapper {
                 .index(button.getButtonIndex())
                 .autofillText(button.getAutofillText())
                 .example(button.getExample())
-                .supportedApps(button.getSupportedApps() != null 
-                        ? button.getSupportedApps().stream().map(this::mapToSupportedAppDto).collect(Collectors.toList()) 
+                .supportedApps(button.getSupportedApps() != null
+                        ? button.getSupportedApps().stream().map(this::mapToSupportedAppDto).collect(Collectors.toList())
                         : null)
                 .build();
     }
 
-    /**
-     * Maps carousel card entity to DTO.
-     */
     private TemplateComponentCardsDto mapToCarouselCardDto(TemplateCarouselCard card) {
         TemplateComponentCardsDto dto = new TemplateComponentCardsDto();
         dto.setIndex(card.getCardIndex());
@@ -574,20 +497,16 @@ public class TemplateMapper {
         return dto;
     }
 
-    /**
-     * Builds carousel card component DTOs from entity.
-     */
     private List<TemplateCarouselCardComponent> buildCarouselCardComponentDtos(TemplateCarouselCard card) {
         List<TemplateCarouselCardComponent> components = new ArrayList<>();
         List<String> parameters = parseJsonArray(card.getParameters());
         int paramIndex = 0;
 
-        // HEADER component
         if (card.getMediaType() != null || card.getImageUrl() != null || card.getHeader() != null) {
             TemplateCarouselCardComponent header = new TemplateCarouselCardComponent();
             header.setType("HEADER");
-            header.setFormat(card.getMediaType() != null 
-                    ? MediaFormat.fromValue(card.getMediaType()).toString() 
+            header.setFormat(card.getMediaType() != null
+                    ? MediaFormat.fromValue(card.getMediaType()).toString()
                     : MediaFormat.IMAGE.toString());
             header.setText(card.getHeader());
 
@@ -596,7 +515,6 @@ public class TemplateMapper {
                 example.setHeaderHandle(List.of(card.getImageUrl()));
             }
 
-            // Extract header text examples
             if (card.getHeader() != null) {
                 int headerVarCount = countVariables(card.getHeader());
                 if (headerVarCount > 0 && !parameters.isEmpty()) {
@@ -614,7 +532,6 @@ public class TemplateMapper {
             components.add(header);
         }
 
-        // BODY component
         if (card.getBody() != null) {
             TemplateCarouselCardComponent body = new TemplateCarouselCardComponent();
             body.setType("BODY");
@@ -636,7 +553,6 @@ public class TemplateMapper {
             components.add(body);
         }
 
-        // BUTTONS component
         if (card.getButtons() != null && !card.getButtons().isEmpty()) {
             TemplateCarouselCardComponent buttons = new TemplateCarouselCardComponent();
             buttons.setType("BUTTONS");
@@ -649,9 +565,6 @@ public class TemplateMapper {
         return components;
     }
 
-    /**
-     * Maps carousel button entity to DTO.
-     */
     private TemplateCarouselButton mapToCarouselButtonDto(TemplateCarouselCardButton button) {
         TemplateCarouselButton dto = new TemplateCarouselButton();
         dto.setType(button.getType());
@@ -663,20 +576,17 @@ public class TemplateMapper {
         return dto;
     }
 
-    /**
-     * Maps TemplateText entity to DTO.
-     */
     private TemplateTextDto mapToTextDto(TemplateText text) {
         TemplateTextDto dto = new TemplateTextDto();
         dto.setType(text.getType());
         dto.setTextIndex(text.getTextIndex());
         dto.setText(text.getText());
+        dto.setDefaultValue(text.getDefaultValue());
+        dto.setIsCarousel(text.getIsCarousel());
+        dto.setCardIndex(text.getCardIndex());
         return dto;
     }
 
-    /**
-     * Maps SupportedApp entity to DTO.
-     */
     private SupportedAppDto mapToSupportedAppDto(SupportedApp app) {
         SupportedAppDto dto = new SupportedAppDto();
         dto.setPackageName(app.getPackageName());
@@ -684,15 +594,12 @@ public class TemplateMapper {
         return dto;
     }
 
-    /**
-     * Builds example DTO for component (header media/text examples).
-     */
     private TemplateExampleDto buildExampleDto(TemplateComponent component) {
         TemplateExampleDto example = new TemplateExampleDto();
 
         if ("HEADER".equalsIgnoreCase(component.getType())) {
             String format = component.getFormat();
-            if ("IMAGE".equalsIgnoreCase(format) || "VIDEO".equalsIgnoreCase(format) 
+            if ("IMAGE".equalsIgnoreCase(format) || "VIDEO".equalsIgnoreCase(format)
                     || "DOCUMENT".equalsIgnoreCase(format)) {
                 if (component.getImageUrl() != null) {
                     example.setHeaderHandle(List.of(component.getImageUrl()));
@@ -707,9 +614,6 @@ public class TemplateMapper {
 
     // ==================== UTILITY METHODS ====================
 
-    /**
-     * Serializes list to JSON string.
-     */
     private String serializeToJson(List<String> list) {
         if (list == null || list.isEmpty()) return null;
 
@@ -723,9 +627,6 @@ public class TemplateMapper {
         }
     }
 
-    /**
-     * Parses JSON array string to List.
-     */
     private List<String> parseJsonArray(String json) {
         if (json == null || json.isEmpty()) return new ArrayList<>();
 
@@ -738,9 +639,6 @@ public class TemplateMapper {
         }
     }
 
-    /**
-     * Counts {{1}}, {{2}} style variables in text.
-     */
     private int countVariables(String text) {
         if (text == null || text.isEmpty()) return 0;
 

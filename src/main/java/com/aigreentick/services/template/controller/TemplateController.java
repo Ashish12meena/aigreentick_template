@@ -52,6 +52,20 @@ public class TemplateController {
 
     }
 
+    @DeleteMapping("/delete/all")
+    public ResponseEntity<?> deleteAllTemplate() {
+
+        Long userId = 1L;
+        templateService.deleteAllTemplatesByUserId(userId);
+
+        return ResponseEntity.ok(
+                new ResponseMessage<>(
+                        ResponseStatus.SUCCESS.name(),
+                        "Template deleted",
+                        null));
+
+    }
+
     /**
      * Get all templates for the project with optional search and pagination.
      */

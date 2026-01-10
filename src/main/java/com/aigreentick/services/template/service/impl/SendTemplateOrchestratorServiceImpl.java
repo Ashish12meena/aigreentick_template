@@ -51,6 +51,7 @@ public class SendTemplateOrchestratorServiceImpl {
     private final WalletServiceImpl walletService;
     private final TemplateBuilderServiceImpl templateBuilderService;
     private final MessagingClientImpl messagingClient;
+    private final ChatContactServiceImpl chatContactService;
     private final ObjectMapper objectMapper;
 
     private static final int BATCH_SIZE = 500;
@@ -99,13 +100,17 @@ public class SendTemplateOrchestratorServiceImpl {
         // ========== STEP 8: Deduct Wallet Balance ==========
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // ========== STEP 9: Create Reports and Contacts in Batches ==========
+        // ========== STEP 9: Create Reports in Batches (REPORTS FIRST) ==========
         log.info("=== Creating reports at: {} ===", LocalDateTime.now());
-        createReportsAndContactsInBatches(user.getId(), broadcast.getId(), validNumbers);
+        createReportsInBatches(user.getId(), broadcast.getId(), validNumbers);
 
-        // ========== STEP 10: Build Templates and Dispatch ==========
+        // ========== STEP 10: Create Chat Contacts for ALL Numbers (AFTER REPORTS) ==========
+        log.info("=== Creating chat contacts at: {} ===", LocalDateTime.now());
+        createChatContactsInBatches(user.getId(), validNumbers, request.getCountryId());
+
+        // ========== STEP 11: Build Templates and Dispatch ==========
         log.info("=== Building and dispatching messages at: {} ===", LocalDateTime.now());
-        dispatchMessages(userId, validNumbers, templateDto, request, broadcast.getId(),config);
+        dispatchMessages(userId, validNumbers, templateDto, request, broadcast.getId(), config);
 
         log.info("=== Broadcast completed successfully ===");
         return TemplateResponseDto.builder()
@@ -114,8 +119,6 @@ public class SendTemplateOrchestratorServiceImpl {
                 .status("BROADCAST_INITIATED")
                 .build();
     }
-
-    // ==================== PRIVATE HELPER METHODS ====================
 
     private BigDecimal getPricePerMessage(Long userId, String templateCategory, User user) {
         Double charge;
@@ -163,12 +166,13 @@ public class SendTemplateOrchestratorServiceImpl {
                 .templateId(template.getId())
                 .countryId(request.getCountryId())
                 .campname(request.getCampanyName())
-                .isMedia(request.getIsMedia() ? "1" : "0")
+                .isMedia(request.getIsMedia() != null && request.getIsMedia() ? "1" : "0")
                 .data(data)
                 .total(validNumbers.size())
-                .scheduleAt(request.getScheduledAt() != null ? LocalDateTime.ofInstant(request.getScheduledAt(),
-                        java.time.ZoneId.systemDefault()) : null)
-                .status("1") // Active
+                .scheduleAt(request.getScheduledAt() != null
+                        ? LocalDateTime.ofInstant(request.getScheduledAt(), java.time.ZoneId.systemDefault())
+                        : null)
+                .status("1")
                 .numbers(String.join(",", validNumbers))
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -179,25 +183,21 @@ public class SendTemplateOrchestratorServiceImpl {
 
     private void createBroadcastMedia(Broadcast broadcast, SendTemplateRequestDto request) {
         log.info("Creating broadcast media record for broadcastId: {}", broadcast.getId());
-        // This would typically create a separate BroadcastMedia entity
-        // For now, we're storing media info in the broadcast.data JSON field
-        // If you have a separate BroadcastMedia table, implement it here
+        // Implementation for broadcast media if needed
     }
 
     private void deductWalletBalance(User user, BigDecimal totalDeduction, Long broadcastId) {
         log.info("Deducting {} from userId: {} for broadcastId: {}",
                 totalDeduction, user.getId(), broadcastId);
 
-        // Deduct from user balance
         userService.deductBalance(user.getId(), totalDeduction.doubleValue());
 
-        // Create wallet transaction record
         Wallet wallet = Wallet.builder()
                 .userId(user.getId())
                 .createdBy(user.getId())
                 .amount(totalDeduction.doubleValue())
                 .type(Wallet.WalletType.debit)
-                .status("1") // Active
+                .status("1")
                 .description("Broadcast message charges")
                 .transection("BROADCAST_" + broadcastId)
                 .broadcastId(broadcastId.intValue())
@@ -208,33 +208,44 @@ public class SendTemplateOrchestratorServiceImpl {
         walletService.save(wallet);
     }
 
-    private void createReportsAndContactsInBatches(
-            Long userId,
-            Long broadcastId,
-            List<String> validNumbers) {
+    private void createReportsInBatches(Long userId, Long broadcastId, List<String> validNumbers) {
+        log.info("Creating reports for {} numbers in batches of {}", validNumbers.size(), BATCH_SIZE);
 
-        log.info("Creating reports for {} numbers in batches of {}",
-                validNumbers.size(), BATCH_SIZE);
-
-        // Process in batches to avoid memory issues
         for (int i = 0; i < validNumbers.size(); i += BATCH_SIZE) {
             int end = Math.min(i + BATCH_SIZE, validNumbers.size());
             List<String> batch = validNumbers.subList(i, end);
 
-            // Create reports for this batch
             List<Report> reports = batch.stream()
                     .map(mobile -> createReport(userId, broadcastId, mobile))
                     .collect(Collectors.toList());
 
             reportService.saveAll(reports);
 
-            log.debug("Saved batch {}/{} ({} reports)",
+            log.debug("Saved report batch {}/{} ({} reports)",
                     (i / BATCH_SIZE) + 1,
                     (validNumbers.size() + BATCH_SIZE - 1) / BATCH_SIZE,
                     reports.size());
         }
 
         log.info("Successfully created {} reports", validNumbers.size());
+    }
+
+    private void createChatContactsInBatches(Long userId, List<String> mobileNumbers, Long countryId) {
+        log.info("Creating chat contacts for {} numbers in batches of {}", mobileNumbers.size(), BATCH_SIZE);
+
+        for (int i = 0; i < mobileNumbers.size(); i += BATCH_SIZE) {
+            int end = Math.min(i + BATCH_SIZE, mobileNumbers.size());
+            List<String> batch = mobileNumbers.subList(i, end);
+
+            chatContactService.ensureContactsExist(userId, batch, countryId);
+
+            log.debug("Created contacts batch {}/{} ({} contacts)",
+                    (i / BATCH_SIZE) + 1,
+                    (mobileNumbers.size() + BATCH_SIZE - 1) / BATCH_SIZE,
+                    batch.size());
+        }
+
+        log.info("Successfully ensured {} chat contacts exist", mobileNumbers.size());
     }
 
     private Report createReport(Long userId, Long broadcastId, String mobile) {
@@ -257,33 +268,27 @@ public class SendTemplateOrchestratorServiceImpl {
             TemplateDto templateDto,
             SendTemplateRequestDto request,
             Long broadcastId,
-        WhatsappAccount whatsappAccount) {
+            WhatsappAccount whatsappAccount) {
 
         log.info("Building sendable templates for {} numbers", validNumbers.size());
 
-        // Get WhatsApp account configuration
-        WhatsappAccount config = whatsappAccount;
-
-        // Build WhatsApp account info for messaging service
         WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
-                .phoneNumberId(config.getWhatsappNoId()) // Using whatsappNoId which is phoneNumberId
-                .accessToken(config.getParmenentToken()) // Using parmenentToken which is accessToken
+                .phoneNumberId(whatsappAccount.getWhatsappNoId())
+                .accessToken(whatsappAccount.getParmenentToken())
                 .build();
 
-        // Build all message requests
         List<MessageRequest> messageRequests = templateBuilderService.buildSendableTemplates(
                 userId, validNumbers, templateDto, request);
 
         log.info("Building dispatch items for {} messages", messageRequests.size());
 
-        // Convert MessageRequests to BroadcastDispatchItemDto
         List<BroadcastDispatchItemDto> dispatchItems = new ArrayList<>();
 
         for (MessageRequest messageRequest : messageRequests) {
             try {
                 String payload = objectMapper
-                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                .writeValueAsString(messageRequest);
+                        .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                        .writeValueAsString(messageRequest);
 
                 BroadcastDispatchItemDto item = BroadcastDispatchItemDto.builder()
                         .broadcastId(broadcastId)
@@ -298,7 +303,6 @@ public class SendTemplateOrchestratorServiceImpl {
             }
         }
 
-        // Build dispatch request
         DispatchRequestDto dispatchRequest = DispatchRequestDto.builder()
                 .items(dispatchItems)
                 .accountInfo(accountInfo)
@@ -306,7 +310,6 @@ public class SendTemplateOrchestratorServiceImpl {
 
         log.info("Dispatching {} items to messaging service", dispatchItems.size());
 
-        // Dispatch to messaging service
         FacebookApiResponse<BroadcastDispatchResponseDto> response = messagingClient.dispatchMessage(dispatchRequest);
 
         if (response.isSuccess()) {

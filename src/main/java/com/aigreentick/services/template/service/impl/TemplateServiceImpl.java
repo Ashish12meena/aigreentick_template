@@ -170,4 +170,9 @@ public class TemplateServiceImpl {
     public void deleteTemplateById(Long id) {
         templateRepository.deleteById(id);
     }
+
+    @Transactional
+    public void deleteAllTemplatesByUserId(Long userId) {
+        templateRepository.deleteAllByUserId(userId);
+    }
 }
