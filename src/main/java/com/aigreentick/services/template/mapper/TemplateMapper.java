@@ -83,6 +83,7 @@ public class TemplateMapper {
                 template.addComponent(mapToComponentEntity(compReq));
             }
 
+            // Extract text variables with example values
             extractAllTextVariables(fbTemplate.getComponents(), template);
         }
 
@@ -166,28 +167,51 @@ public class TemplateMapper {
         }
     }
 
+    /**
+     * Extract HEADER text variables with example values
+     */
     private void extractHeaderTextVariables(TemplateExampleRequest example, Template template) {
         if (example == null || example.getHeaderText() == null) return;
 
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
-            String variableKey = "{{" + (i + 1) + "}}";
-            template.addText(buildTemplateText("HEADER", variableKey, i, false, null, null));
+            String exampleValue = headerTexts.get(i);
+            template.addText(buildTemplateText(
+                    "HEADER",
+                    exampleValue,  // Store example value in text field
+                    i,
+                    false,
+                    null,
+                    null  // defaultValue is null, user configures later
+            ));
         }
-        log.debug("Extracted {} HEADER text variables", headerTexts.size());
+        log.debug("Extracted {} HEADER text variables with examples", headerTexts.size());
     }
 
+    /**
+     * Extract BODY text variables with example values
+     */
     private void extractBodyTextVariables(TemplateExampleRequest example, Template template) {
         if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty()) return;
 
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
-            String variableKey = "{{" + (i + 1) + "}}";
-            template.addText(buildTemplateText("BODY", variableKey, i, false, null, null));
+            String exampleValue = bodyTexts.get(i);
+            template.addText(buildTemplateText(
+                    "BODY",
+                    exampleValue,  // Store example value in text field
+                    i,
+                    false,
+                    null,
+                    null
+            ));
         }
-        log.debug("Extracted {} BODY text variables", bodyTexts.size());
+        log.debug("Extracted {} BODY text variables with examples", bodyTexts.size());
     }
 
+    /**
+     * Extract BUTTON text variables with example values
+     */
     private void extractButtonTextVariables(List<TemplateComponentButtonRequest> buttons, Template template) {
         if (buttons == null) return;
 
@@ -195,22 +219,42 @@ public class TemplateMapper {
             if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
 
             int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
-            for (int i = 0; i < btn.getExample().size(); i++) {
-                String variableKey = "{{" + (i + 1) + "}}";
-                template.addText(buildTemplateText("BUTTON", variableKey, buttonIndex, false, null, null));
+            List<String> examples = btn.getExample();
+            
+            for (int i = 0; i < examples.size(); i++) {
+                String exampleValue = examples.get(i);
+                template.addText(buildTemplateText(
+                        "BUTTON",
+                        exampleValue,  // Store example value in text field
+                        i,
+                        false,
+                        null,
+                        null
+                ));
             }
-            log.debug("Extracted {} BUTTON text variables for button index {}",
-                    btn.getExample().size(), buttonIndex);
+            log.debug("Extracted {} BUTTON text variables for button index {} with examples",
+                    examples.size(), buttonIndex);
         }
     }
 
+    /**
+     * Extract CAROUSEL text variables with cardIndex and example values
+     * Uses loop index as cardIndex since Facebook API may not return explicit index
+     */
     private void extractCarouselTextVariables(TemplateComponentRequest component, Template template) {
         if (component.getCards() == null) return;
 
-        for (TemplateComponentCardsRequest card : component.getCards()) {
-            int cardIndex = card.getIndex() != null ? card.getIndex() : 0;
+        List<TemplateComponentCardsRequest> cards = component.getCards();
+        
+        for (int i = 0; i < cards.size(); i++) {
+            TemplateComponentCardsRequest card = cards.get(i);
+            
+            // Use explicit index if available, otherwise use loop index
+            int cardIndex = card.getIndex() != null ? card.getIndex() : i;
 
             if (card.getComponents() == null) continue;
+
+            log.debug("Processing carousel card at index: {}", cardIndex);
 
             for (TemplateCarouselCardComponentRequest cardComp : card.getComponents()) {
                 String compType = cardComp.getType().toUpperCase();
@@ -224,19 +268,35 @@ public class TemplateMapper {
         }
     }
 
+    /**
+     * Extract carousel HEADER variables with cardIndex and example values
+     */
     private void extractCarouselHeaderTexts(TemplateCarouselCardComponentRequest cardComp,
                                             int cardIndex, Template template) {
         if (cardComp.getExample() == null) return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
-            for (int i = 0; i < example.getHeaderText().size(); i++) {
-                String variableKey = "{{" + (i + 1) + "}}";
-                template.addText(buildTemplateText("HEADER", variableKey, i, true, cardIndex, null));
+            List<String> headerTexts = example.getHeaderText();
+            for (int i = 0; i < headerTexts.size(); i++) {
+                String exampleValue = headerTexts.get(i);
+                template.addText(buildTemplateText(
+                        "HEADER",
+                        exampleValue,  // Example value
+                        i,
+                        true,
+                        cardIndex,     // Card index for carousel
+                        null
+                ));
             }
+            log.debug("Extracted {} HEADER variables for card {} with examples", 
+                    headerTexts.size(), cardIndex);
         }
     }
 
+    /**
+     * Extract carousel BODY variables with cardIndex and example values
+     */
     private void extractCarouselBodyTexts(TemplateCarouselCardComponentRequest cardComp,
                                           int cardIndex, Template template) {
         if (cardComp.getExample() == null) return;
@@ -245,12 +305,24 @@ public class TemplateMapper {
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
             List<String> bodyTexts = example.getBodyText().get(0);
             for (int i = 0; i < bodyTexts.size(); i++) {
-                String variableKey = "{{" + (i + 1) + "}}";
-                template.addText(buildTemplateText("BODY", variableKey, i, true, cardIndex, null));
+                String exampleValue = bodyTexts.get(i);
+                template.addText(buildTemplateText(
+                        "BODY",
+                        exampleValue,  // Example value
+                        i,
+                        true,
+                        cardIndex,     // Card index for carousel
+                        null
+                ));
             }
+            log.debug("Extracted {} BODY variables for card {} with examples", 
+                    bodyTexts.size(), cardIndex);
         }
     }
 
+    /**
+     * Extract carousel BUTTON variables with cardIndex and example values
+     */
     private void extractCarouselButtonTexts(TemplateCarouselCardComponentRequest cardComp,
                                             int cardIndex, Template template) {
         if (cardComp.getButtons() == null) return;
@@ -259,10 +331,21 @@ public class TemplateMapper {
             if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
 
             int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
-            for (int i = 0; i < btn.getExample().size(); i++) {
-                String variableKey = "{{" + (i + 1) + "}}";
-                template.addText(buildTemplateText("BUTTON", variableKey, buttonIndex, true, cardIndex, null));
+            List<String> examples = btn.getExample();
+            
+            for (int i = 0; i < examples.size(); i++) {
+                String exampleValue = examples.get(i);
+                template.addText(buildTemplateText(
+                        "BUTTON",
+                        exampleValue,  // Example value
+                        buttonIndex,   // Button index within card
+                        true,
+                        cardIndex,     // Card index for carousel
+                        null
+                ));
             }
+            log.debug("Extracted {} BUTTON variables for card {} button {} with examples",
+                    examples.size(), cardIndex, buttonIndex);
         }
     }
 
@@ -282,15 +365,22 @@ public class TemplateMapper {
                 .build();
     }
 
-    private TemplateText buildTemplateText(String type, String text, int textIndex,
+    /**
+     * Build TemplateText with:
+     * - text: stores example value from Facebook (used as fallback)
+     * - textIndex: position of variable within component type
+     * - cardIndex: card position for carousel templates
+     * - defaultValue: user-configured default (null initially)
+     */
+    private TemplateText buildTemplateText(String type, String exampleValue, int textIndex,
                                            boolean isCarousel, Integer cardIndex, String defaultValue) {
         return TemplateText.builder()
                 .type(type)
-                .text(text)
+                .text(exampleValue)      // Example value as fallback
                 .textIndex(textIndex)
                 .isCarousel(isCarousel)
                 .cardIndex(cardIndex)
-                .defaultValue(defaultValue)
+                .defaultValue(defaultValue)  // User configures this later
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -319,9 +409,11 @@ public class TemplateMapper {
         }
 
         if (req.getCards() != null) {
-            AtomicInteger cardIndex = new AtomicInteger(0);
-            for (TemplateComponentCardsRequest cardReq : req.getCards()) {
-                int index = cardReq.getIndex() != null ? cardReq.getIndex() : cardIndex.getAndIncrement();
+            List<TemplateComponentCardsRequest> cards = req.getCards();
+            for (int i = 0; i < cards.size(); i++) {
+                TemplateComponentCardsRequest cardReq = cards.get(i);
+                // Use explicit index if available, otherwise use loop index
+                int index = cardReq.getIndex() != null ? cardReq.getIndex() : i;
                 comp.addCarouselCard(mapToCarouselCardEntity(cardReq, index));
             }
         }
@@ -580,8 +672,8 @@ public class TemplateMapper {
         TemplateTextDto dto = new TemplateTextDto();
         dto.setType(text.getType());
         dto.setTextIndex(text.getTextIndex());
-        dto.setText(text.getText());
-        dto.setDefaultValue(text.getDefaultValue());
+        dto.setText(text.getText());           // Example value (fallback)
+        dto.setDefaultValue(text.getDefaultValue());  // User-configured default
         dto.setIsCarousel(text.getIsCarousel());
         dto.setCardIndex(text.getCardIndex());
         return dto;
