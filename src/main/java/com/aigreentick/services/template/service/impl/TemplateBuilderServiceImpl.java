@@ -116,20 +116,22 @@ public class TemplateBuilderServiceImpl {
     private Map<String, String> buildFallbackValuesMap(TemplateDto template) {
         Map<String, String> fallbacks = new HashMap<>();
 
-        if (template.getTexts() == null) return fallbacks;
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return fallbacks;
+        }
 
         for (TemplateTextDto textDto : template.getTexts()) {
             String compositeKey = buildCompositeKey(
                     textDto.getType(),
                     textDto.getTextIndex(),
                     textDto.getCardIndex(),
-                    textDto.getIsCarousel()
-            );
+                    textDto.getIsCarousel());
 
             // Priority: defaultValue > text (example value) > empty string
             String value = textDto.getDefaultValue();
             if (value == null || value.isBlank()) {
-                value = textDto.getText();  // Example value as fallback
+                value = textDto.getText(); // Example value as fallback
             }
             if (value == null) {
                 value = "";
@@ -156,7 +158,9 @@ public class TemplateBuilderServiceImpl {
      * for contact attribute mapping
      */
     private List<String> extractAttributeKeys(TemplateDto template) {
-        if (template.getTexts() == null) return List.of();
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return Collections.emptyList();
+        }
 
         return template.getTexts().stream()
                 .map(TemplateTextDto::getDefaultValue)
@@ -167,7 +171,8 @@ public class TemplateBuilderServiceImpl {
     }
 
     /**
-     * Build parameters using only fallback values (for fully parameterized templates)
+     * Build parameters using only fallback values (for fully parameterized
+     * templates)
      */
     private Map<String, Map<String, String>> buildParametersFromFallbacks(
             List<String> phoneNumbers,
@@ -200,8 +205,7 @@ public class TemplateBuilderServiceImpl {
                         textDto.getType(),
                         textDto.getTextIndex(),
                         textDto.getCardIndex(),
-                        textDto.getIsCarousel()
-                );
+                        textDto.getIsCarousel());
 
                 // Try to get value from contact attributes using defaultValue as key
                 String value = null;
@@ -311,7 +315,8 @@ public class TemplateBuilderServiceImpl {
                     addIfNotNull(components, header);
                 }
                 case BODY -> {
-                    Component body = buildBodyComponent(template, resolvedParams, null); // null cardIndex for non-carousel
+                    Component body = buildBodyComponent(template, resolvedParams, null); // null cardIndex for
+                                                                                         // non-carousel
                     addIfNotNull(components, body);
                 }
                 case BUTTONS -> {
@@ -332,7 +337,7 @@ public class TemplateBuilderServiceImpl {
 
         addCopyCodeButtonIfPresent(requestDto, template, components);
 
-        sendableTemplate.setComponents(components);
+        sendableTemplate.setComponents(components.isEmpty() ? null : components);
         messageRequest.setTemplate(sendableTemplate);
 
         return messageRequest;
@@ -361,6 +366,11 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return null;
+        }
+
         List<TemplateTextDto> headerTexts = template.getTexts().stream()
                 .filter(t -> "HEADER".equalsIgnoreCase(t.getType()))
                 .filter(t -> matchesCardIndex(t, cardIndex))
@@ -369,7 +379,8 @@ public class TemplateBuilderServiceImpl {
                         b.getTextIndex() != null ? b.getTextIndex() : 0))
                 .toList();
 
-        if (headerTexts.isEmpty()) return null;
+        if (headerTexts.isEmpty())
+            return null;
 
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto textDto : headerTexts) {
@@ -377,15 +388,15 @@ public class TemplateBuilderServiceImpl {
                     textDto.getType(),
                     textDto.getTextIndex(),
                     cardIndex,
-                    textDto.getIsCarousel()
-            );
+                    textDto.getIsCarousel());
             String value = resolveValueWithFallback(textDto, resolvedParams, compositeKey);
             if (!value.isEmpty()) {
                 params.add(buildTextParameter(value, Parameter::new));
             }
         }
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         Component component = new Component();
         component.setType(ComponentType.HEADER.getValue().toLowerCase());
@@ -426,6 +437,11 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return null;
+        }
+
         List<TemplateTextDto> bodyTexts = template.getTexts().stream()
                 .filter(t -> "BODY".equalsIgnoreCase(t.getType()))
                 .filter(t -> matchesCardIndex(t, cardIndex))
@@ -434,7 +450,8 @@ public class TemplateBuilderServiceImpl {
                         b.getTextIndex() != null ? b.getTextIndex() : 0))
                 .toList();
 
-        if (bodyTexts.isEmpty()) return null;
+        if (bodyTexts.isEmpty())
+            return null;
 
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto textDto : bodyTexts) {
@@ -442,13 +459,13 @@ public class TemplateBuilderServiceImpl {
                     textDto.getType(),
                     textDto.getTextIndex(),
                     cardIndex,
-                    textDto.getIsCarousel()
-            );
+                    textDto.getIsCarousel());
             String value = resolveValueWithFallback(textDto, resolvedParams, compositeKey);
             params.add(buildTextParameter(value, Parameter::new));
         }
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         Component component = new Component();
         component.setType(ComponentType.BODY.getValue().toLowerCase());
@@ -467,14 +484,18 @@ public class TemplateBuilderServiceImpl {
             TemplateComponentDto templateComponent,
             Map<String, String> resolvedParams,
             Integer cardIndex) {
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return null;
+        }
 
         List<Component> buttonComponents = new ArrayList<>();
 
         List<TemplateComponentButtonDto> buttons = templateComponent.getButtons();
-        
+
         for (int buttonPosition = 0; buttonPosition < buttons.size(); buttonPosition++) {
             TemplateComponentButtonDto button = buttons.get(buttonPosition);
-            
+
             if (ButtonTypes.fromValue(button.getType()) == ButtonTypes.URL) {
                 // Find matching BUTTON text for this button
                 List<TemplateTextDto> buttonTexts = template.getTexts().stream()
@@ -488,9 +509,8 @@ public class TemplateBuilderServiceImpl {
                             textDto.getType(),
                             textDto.getTextIndex(),
                             cardIndex,
-                            textDto.getIsCarousel()
-                    );
-                    
+                            textDto.getIsCarousel());
+
                     String value = resolveValueWithFallback(textDto, resolvedParams, compositeKey);
 
                     if (!value.isEmpty()) {
@@ -514,7 +534,8 @@ public class TemplateBuilderServiceImpl {
             TemplateDto template,
             List<Component> components) {
 
-        if (requestDto.getCopyCode() == null) return;
+        if (requestDto.getCopyCode() == null)
+            return;
 
         template.getComponents().stream()
                 .filter(c -> ComponentType.BUTTONS.getValue().equalsIgnoreCase(c.getType()))
@@ -626,7 +647,8 @@ public class TemplateBuilderServiceImpl {
                 MediaType mediaType = MediaType.fromValue(comp.getFormat());
                 if (mediaType == MediaType.PRODUCT) {
                     yield List.of(buildCarouselHeaderProductComponent(comp, requestDto, productQueue.poll()));
-                } else if (mediaType == MediaType.IMAGE || mediaType == MediaType.VIDEO || mediaType == MediaType.DOCUMENT) {
+                } else if (mediaType == MediaType.IMAGE || mediaType == MediaType.VIDEO
+                        || mediaType == MediaType.DOCUMENT) {
                     yield List.of(buildCarouselHeaderMediaComponent(comp, mediaIdQueue.poll()));
                 } else {
                     // TEXT header for carousel
@@ -651,6 +673,11 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return null;
+        }
+
         List<TemplateTextDto> headerTexts = template.getTexts().stream()
                 .filter(t -> "HEADER".equalsIgnoreCase(t.getType()))
                 .filter(t -> matchesCardIndex(t, cardIndex))
@@ -659,7 +686,8 @@ public class TemplateBuilderServiceImpl {
                         b.getTextIndex() != null ? b.getTextIndex() : 0))
                 .toList();
 
-        if (headerTexts.isEmpty()) return null;
+        if (headerTexts.isEmpty())
+            return null;
 
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto textDto : headerTexts) {
@@ -667,15 +695,15 @@ public class TemplateBuilderServiceImpl {
                     textDto.getType(),
                     textDto.getTextIndex(),
                     cardIndex,
-                    true
-            );
+                    true);
             String value = resolveValueWithFallback(textDto, resolvedParams, compositeKey);
             if (!value.isEmpty()) {
                 params.add(buildTextParameter(value, Parameter::new));
             }
         }
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         CarouselComponent component = new CarouselComponent();
         component.setType(ComponentType.HEADER.getValue().toLowerCase());
@@ -725,6 +753,11 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return null;
+        }
+
         List<TemplateTextDto> bodyTexts = template.getTexts().stream()
                 .filter(t -> "BODY".equalsIgnoreCase(t.getType()))
                 .filter(t -> matchesCardIndex(t, cardIndex))
@@ -733,7 +766,8 @@ public class TemplateBuilderServiceImpl {
                         b.getTextIndex() != null ? b.getTextIndex() : 0))
                 .toList();
 
-        if (bodyTexts.isEmpty()) return null;
+        if (bodyTexts.isEmpty())
+            return null;
 
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto textDto : bodyTexts) {
@@ -741,13 +775,13 @@ public class TemplateBuilderServiceImpl {
                     textDto.getType(),
                     textDto.getTextIndex(),
                     cardIndex,
-                    true
-            );
+                    true);
             String value = resolveValueWithFallback(textDto, resolvedParams, compositeKey);
             params.add(buildTextParameter(value, Parameter::new));
         }
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         CarouselComponent component = new CarouselComponent();
         component.setType(ComponentType.BODY.getValue().toLowerCase());
@@ -764,6 +798,10 @@ public class TemplateBuilderServiceImpl {
             TemplateCarouselCardComponent comp,
             Map<String, String> resolvedParams,
             Integer cardIndex) {
+        // ✅ Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return null;
+        }
 
         List<TemplateCarouselButton> buttons = Optional.ofNullable(comp.getButtons())
                 .orElse(Collections.emptyList());
@@ -779,7 +817,7 @@ public class TemplateBuilderServiceImpl {
         // Iterate with index to get button position in card
         for (int buttonPositionInCard = 0; buttonPositionInCard < buttons.size(); buttonPositionInCard++) {
             TemplateCarouselButton button = buttons.get(buttonPositionInCard);
-            
+
             CarouselComponent btnComp = switch (ButtonTypes.fromValue(button.getType())) {
                 case URL -> buildCarouselUrlButton(template, button, resolvedParams, cardIndex, buttonPositionInCard);
                 case QUICK_REPLY -> buildCarouselQuickReplyButton(button, payload, buttonPositionInCard);
@@ -819,15 +857,14 @@ public class TemplateBuilderServiceImpl {
         // Get the first matching button text for this card
         // (each card typically has one URL button with one variable)
         TemplateTextDto textDto = buttonTexts.get(0);
-        
+
         // Build composite key for resolved params lookup
         String compositeKey = buildCompositeKey(
                 textDto.getType(),
                 textDto.getTextIndex(),
                 cardIndex,
-                true
-        );
-        
+                true);
+
         // Priority: resolvedParams (contact attr/default) > text (example value)
         String value = resolvedParams.get(compositeKey);
         if (value == null || value.isBlank()) {
@@ -848,9 +885,9 @@ public class TemplateBuilderServiceImpl {
         CarouselComponent component = new CarouselComponent();
         component.setType("button");
         component.setSubType(button.getType().toLowerCase());
-        component.setIndex(buttonPositionInCard);  // Use position in card's button list
+        component.setIndex(buttonPositionInCard); // Use position in card's button list
         component.setParameters(List.of(param));
-        
+
         log.debug("Built URL button for card {} at index {} with value: {}", cardIndex, buttonPositionInCard, value);
         return component;
     }
@@ -859,10 +896,10 @@ public class TemplateBuilderServiceImpl {
      * Build carousel Quick Reply button with index
      */
     private CarouselComponent buildCarouselQuickReplyButton(
-            TemplateCarouselButton button, 
+            TemplateCarouselButton button,
             String payload,
             int buttonPositionInCard) {
-        
+
         Parameter param = new Parameter();
         param.setType("payload");
         param.setPayload(payload);
@@ -870,7 +907,7 @@ public class TemplateBuilderServiceImpl {
         CarouselComponent component = new CarouselComponent();
         component.setType("button");
         component.setSubType(button.getType().toLowerCase());
-        component.setIndex(buttonPositionInCard);  // Use position in card's button list
+        component.setIndex(buttonPositionInCard); // Use position in card's button list
         component.setParameters(List.of(param));
         return component;
     }
@@ -879,7 +916,8 @@ public class TemplateBuilderServiceImpl {
 
     /**
      * Check if TemplateTextDto matches the given cardIndex
-     * For non-carousel: cardIndex is null, match texts where isCarousel is false/null
+     * For non-carousel: cardIndex is null, match texts where isCarousel is
+     * false/null
      * For carousel: match texts where cardIndex matches
      */
     private boolean matchesCardIndex(TemplateTextDto textDto, Integer cardIndex) {
@@ -888,8 +926,8 @@ public class TemplateBuilderServiceImpl {
             return textDto.getIsCarousel() == null || !textDto.getIsCarousel();
         } else {
             // Carousel component - match texts with same cardIndex
-            return textDto.getIsCarousel() != null 
-                    && textDto.getIsCarousel() 
+            return textDto.getIsCarousel() != null
+                    && textDto.getIsCarousel()
                     && cardIndex.equals(textDto.getCardIndex());
         }
     }
@@ -897,20 +935,21 @@ public class TemplateBuilderServiceImpl {
     /**
      * Resolve value with priority: defaultValue > text (example value)
      */
-    private String resolveValueWithFallback(TemplateTextDto textDto, Map<String, String> resolvedParams, String compositeKey) {
+    private String resolveValueWithFallback(TemplateTextDto textDto, Map<String, String> resolvedParams,
+            String compositeKey) {
         // First try resolved params (from contact attributes or pre-resolved)
         String value = resolvedParams.get(compositeKey);
-        
+
         // Fallback to defaultValue (user configured)
         if (value == null || value.isBlank()) {
             value = textDto.getDefaultValue();
         }
-        
+
         // Fallback to text (example value from Facebook)
         if (value == null || value.isBlank()) {
             value = textDto.getText();
         }
-        
+
         return value != null ? value : "";
     }
 
@@ -1010,10 +1049,12 @@ public class TemplateBuilderServiceImpl {
     }
 
     private <T> void addIfNotNull(List<T> list, T element) {
-        if (element != null) list.add(element);
+        if (element != null)
+            list.add(element);
     }
 
     private <T> void addAllIfNotEmpty(List<T> list, List<T> elements) {
-        if (elements != null && !elements.isEmpty()) list.addAll(elements);
+        if (elements != null && !elements.isEmpty())
+            list.addAll(elements);
     }
 }
