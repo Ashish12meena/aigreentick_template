@@ -4,6 +4,8 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
@@ -734,8 +736,8 @@ public class TemplateMapper {
     private int countVariables(String text) {
         if (text == null || text.isEmpty()) return 0;
 
-        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile("\\{\\{\\d+\\}\\}");
-        java.util.regex.Matcher matcher = pattern.matcher(text);
+        Pattern pattern = Pattern.compile("\\{\\{\\d+\\}\\}");
+        Matcher matcher = pattern.matcher(text);
         int count = 0;
         while (matcher.find()) count++;
         return count;

@@ -116,7 +116,7 @@ public class TemplateBuilderServiceImpl {
     private Map<String, String> buildFallbackValuesMap(TemplateDto template) {
         Map<String, String> fallbacks = new HashMap<>();
 
-        // ✅ Guard
+        // Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return fallbacks;
         }
@@ -366,7 +366,7 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
-        // ✅ Guard
+        //  Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return null;
         }
@@ -437,7 +437,7 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
-        // ✅ Guard
+        // Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return null;
         }
@@ -484,7 +484,7 @@ public class TemplateBuilderServiceImpl {
             TemplateComponentDto templateComponent,
             Map<String, String> resolvedParams,
             Integer cardIndex) {
-        // ✅ Guard
+        //  Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return null;
         }
@@ -673,7 +673,7 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
-        // ✅ Guard
+        //  Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return null;
         }
@@ -753,7 +753,7 @@ public class TemplateBuilderServiceImpl {
             Map<String, String> resolvedParams,
             Integer cardIndex) {
 
-        // ✅ Guard
+        //  Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return null;
         }
@@ -798,7 +798,7 @@ public class TemplateBuilderServiceImpl {
             TemplateCarouselCardComponent comp,
             Map<String, String> resolvedParams,
             Integer cardIndex) {
-        // ✅ Guard
+        //  Guard
         if (template.getTexts() == null || template.getTexts().isEmpty()) {
             return null;
         }
