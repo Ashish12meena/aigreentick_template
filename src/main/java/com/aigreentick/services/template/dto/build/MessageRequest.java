@@ -1,7 +1,5 @@
 package com.aigreentick.services.template.dto.build;
 
-import com.aigreentick.services.template.enums.MessageType;
-
 import jakarta.validation.constraints.NotNull;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
