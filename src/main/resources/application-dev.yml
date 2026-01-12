@@ -27,19 +27,27 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 100MB        # single file limit
-      max-request-size: 110MB     # total request payload limit (slightly higher)
-      enabled: true               # ensure multipart handling is active
+      max-file-size: 100MB
+      max-request-size: 110MB
+      enabled: true
 
 # ---------------- WhatsApp Service ----------------
 whatsapp-service:
   base-url: https://graph.facebook.com
   api-version: v23.0
 
-#----------Messaging broadcast Service --------
-Messaging-service:
+# ---------- Messaging broadcast Service ----------
+messaging-service:
   base-url: http://localhost:8081/api/v1/broadcast/dispatch
-  
+
+# ---------- Broadcast Configuration ----------
+broadcast:
+  batch-size: 200          # For reports & contacts
+  dispatch-chunk-size: 100 # For messaging service dispatch
+
+# ---------- Template Configuration ----------
+template:
+  default-page-size: 10
 
 # duplicate config currently used in @Value injections
 apiVersion: v23.0
