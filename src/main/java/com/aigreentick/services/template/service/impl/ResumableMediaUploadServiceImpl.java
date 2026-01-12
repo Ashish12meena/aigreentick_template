@@ -46,7 +46,7 @@ public class ResumableMediaUploadServiceImpl {
             throw new IllegalArgumentException("userId ID is required");
         }
 
-        AccessTokenCredentials accessTokenCredentials = userService.getWabaAppAccessToken();
+        AccessTokenCredentials accessTokenCredentials = userService.getWabaAppAccessToken(userId);
         String offset = "0";
         
         try {

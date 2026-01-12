@@ -50,7 +50,7 @@ public class TemplateOrchestratorServiceImpl {
         templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), userId);
 
         // Fetch WABA credentials
-        AccessTokenCredentials credentials = userService.getWabaAccessToken();
+        AccessTokenCredentials credentials = userService.getWabaAccessToken(userId);
 
         // Serialize template request
         String jsonRequest = serializeTemplate(templateRequest);
@@ -103,7 +103,7 @@ public class TemplateOrchestratorServiceImpl {
         }
 
         // 1. Fetch WABA access token
-        AccessTokenCredentials credentials = userService.getWabaAccessToken();
+        AccessTokenCredentials credentials = userService.getWabaAccessToken(userId);
 
         // 2. Call Facebook API to get all templates
         FacebookApiResponse<JsonNode> response = whatsappClientImpl.getAllTemplates(

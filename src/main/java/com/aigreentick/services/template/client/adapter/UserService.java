@@ -1,20 +1,33 @@
 package com.aigreentick.services.template.client.adapter;
 
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
 import com.aigreentick.services.template.dto.response.AccessTokenCredentials;
+import com.aigreentick.services.template.model.WhatsappAccount;
+import com.aigreentick.services.template.service.impl.WhatsappAccountServiceImpl;
 
-@Component
+import lombok.RequiredArgsConstructor;
+
+@Service
+@RequiredArgsConstructor
 public class UserService {
+    private final WhatsappAccountServiceImpl whatsappAccountServiceImpl;
 
-    public AccessTokenCredentials getWabaAccessToken() {
-        return new AccessTokenCredentials("1436853954305849",
-                "EAAOcfziRygMBPGSZCjTEADbcIXleBDVHuZAF61EDXn6qw2GuS6ghjiVHESlosKbAFGEAGMkArSBqyyyaqUxS51dSiLFtZBRd0oEZAY1LiNElHPcM3bsRzqNjaQZAXht6WOKuEWEGfotJASpCGqMOKBrXUMQr03TopqfrZCBe4xrmlfwVipb6dYQaVkmn8gCqzN");
+    public AccessTokenCredentials getWabaAccessToken(Long userId) {
+        WhatsappAccount whatsappAccount = whatsappAccountServiceImpl.getActiveAccountByUserId(userId);
+
+        return AccessTokenCredentials.builder()
+        .wabaId(whatsappAccount.getWhatsappBizId())
+        .accessToken(whatsappAccount.getParmenentToken())
+        .build();
     }
 
-    public AccessTokenCredentials getWabaAppAccessToken() {
-        return new AccessTokenCredentials("530819718510685",
-                "EAAOcfziRygMBPGSZCjTEADbcIXleBDVHuZAF61EDXn6qw2GuS6ghjiVHESlosKbAFGEAGMkArSBqyyyaqUxS51dSiLFtZBRd0oEZAY1LiNElHPcM3bsRzqNjaQZAXht6WOKuEWEGfotJASpCGqMOKBrXUMQr03TopqfrZCBe4xrmlfwVipb6dYQaVkmn8gCqzN");
+    public AccessTokenCredentials getWabaAppAccessToken(Long userId) {
+        WhatsappAccount whatsappAccount = whatsappAccountServiceImpl.getActiveAccountByUserId(userId);
+        return AccessTokenCredentials.builder()
+        .wabaId(whatsappAccount.getWhatsappNoId())
+        .accessToken(whatsappAccount.getParmenentToken())
+        .build();
     }
 
 }
