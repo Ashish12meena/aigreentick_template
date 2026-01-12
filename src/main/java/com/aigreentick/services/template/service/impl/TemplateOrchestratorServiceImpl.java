@@ -79,17 +79,6 @@ public class TemplateOrchestratorServiceImpl {
             return new TemplateResponseDto("Invalid response from Facebook API", jsonData);
         }
 
-        String data = serializeToString(jsonData);
-
-        // Map and save template
-        // Template template = templateMapper.toTemplateEntity(request, userId);
-        // template.setWaId(templateId); // Store the Facebook template ID
-        // template.setStatus(status);
-        // template.setPayload(jsonRequest);
-        // template.setCategory(category);
-        // template.setResponse(data);
-
-        // templateServiceImpl.save(template);
 
         return templateMapper.mapToTemplateResponse(templateId,status,category);
     }
@@ -187,16 +176,16 @@ public class TemplateOrchestratorServiceImpl {
         }
     }
 
-    private String serializeToString(JsonNode jsonData) {
-        try {
-            return objectMapper.copy()
-                    .setSerializationInclusion(Include.NON_NULL)
-                    .writeValueAsString(jsonData);
-        } catch (Exception e) {
-            log.error("Failed to serialize JsonNode to string", e);
-            throw new IllegalStateException("JSON serialization failed", e);
-        }
-    }
+    // private String serializeToString(JsonNode jsonData) {
+    //     try {
+    //         return objectMapper.copy()
+    //                 .setSerializationInclusion(Include.NON_NULL)
+    //                 .writeValueAsString(jsonData);
+    //     } catch (Exception e) {
+    //         log.error("Failed to serialize JsonNode to string", e);
+    //         throw new IllegalStateException("JSON serialization failed", e);
+    //     }
+    // }
 
     private String serializeTemplate(TemplateRequest request) {
         try {
