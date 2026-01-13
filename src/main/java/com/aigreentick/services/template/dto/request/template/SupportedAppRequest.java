@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.dto.request;
+package com.aigreentick.services.template.dto.request.template;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 

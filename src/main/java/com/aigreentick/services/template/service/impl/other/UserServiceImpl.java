@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.service.impl;
+package com.aigreentick.services.template.service.impl.other;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 

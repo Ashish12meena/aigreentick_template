@@ -9,8 +9,8 @@ import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.aigreentick.services.template.dto.request.TemplateTextResponseDto;
-import com.aigreentick.services.template.dto.request.TemplateTextUpdateDefaultRequest.TemplateTextDefaultItems;
+import com.aigreentick.services.template.dto.request.template.TemplateTextResponseDto;
+import com.aigreentick.services.template.dto.request.template.TemplateTextUpdateDefaultRequest.TemplateTextDefaultItems;
 import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.model.TemplateText;
 import com.aigreentick.services.template.repository.TemplateRepository;

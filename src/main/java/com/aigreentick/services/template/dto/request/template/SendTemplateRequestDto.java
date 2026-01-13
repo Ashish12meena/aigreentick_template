@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.dto.request;
+package com.aigreentick.services.template.dto.request.template;
 
 import java.time.Instant;
 import java.util.List;
@@ -18,6 +18,7 @@ public class SendTemplateRequestDto {
     private String otp;
     private String copyCode;
     // private String templateType;
+    private boolean isCsv;
     private boolean isFullyPrameterized;
     private String defaultValue;
     private Map<String, String> parameters; 

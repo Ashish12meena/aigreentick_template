@@ -1,27 +1,31 @@
-    package com.aigreentick.services.template.dto.response;
+package com.aigreentick.services.template.dto.response;
 
-    import lombok.Data;
+import lombok.Data;
 
-    @Data
-    public class FacebookApiResponse<T> {
-        private boolean success;
-        private T data;
-        private String errorMessage;
-        private int statusCode;
+@Data
+public class FacebookApiResponse<T> {
+    private boolean success;
+    private T data;
+    private String errorMessage;
+    private int statusCode;
 
-        public static <T> FacebookApiResponse<T> success(T data, int statusCode) {
-            FacebookApiResponse<T> response = new FacebookApiResponse<>();
-            response.success = true;
-            response.data = data;
-            response.statusCode = statusCode;
-            return response;
-        }
-
-        public static <T> FacebookApiResponse<T> error(String errorMessage, int statusCode) {
-            FacebookApiResponse<T> response = new FacebookApiResponse<>();
-            response.success = false;
-            response.errorMessage = errorMessage;
-            response.statusCode = statusCode;
-            return response;
-        }
+    private FacebookApiResponse() {
+        // prevent accidental raw instantiation
     }
+
+    public static <T> FacebookApiResponse<T> success(T data, int statusCode) {
+        FacebookApiResponse<T> response = new FacebookApiResponse<>();
+        response.success = true;
+        response.data = data;
+        response.statusCode = statusCode;
+        return response;
+    }
+
+    public static <T> FacebookApiResponse<T> error(String errorMessage, int statusCode) {
+        FacebookApiResponse<T> response = new FacebookApiResponse<>();
+        response.success = false;
+        response.errorMessage = errorMessage;
+        response.statusCode = statusCode;
+        return response;
+    }
+}

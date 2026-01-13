@@ -15,10 +15,10 @@ import org.springframework.transaction.annotation.Transactional;
 import com.aigreentick.services.template.client.adapter.MessagingClientImpl;
 import com.aigreentick.services.template.dto.build.MessageRequest;
 import com.aigreentick.services.template.dto.build.TemplateDto;
-import com.aigreentick.services.template.dto.request.BroadcastDispatchItemDto;
-import com.aigreentick.services.template.dto.request.DispatchRequestDto;
-import com.aigreentick.services.template.dto.request.SendTemplateRequestDto;
 import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
+import com.aigreentick.services.template.dto.request.template.BroadcastDispatchItemDto;
+import com.aigreentick.services.template.dto.request.template.DispatchRequestDto;
+import com.aigreentick.services.template.dto.request.template.SendTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.BroadcastDispatchResponseDto;
 import com.aigreentick.services.template.dto.response.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
@@ -32,6 +32,9 @@ import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.model.User;
 import com.aigreentick.services.template.model.Wallet;
 import com.aigreentick.services.template.model.WhatsappAccount;
+import com.aigreentick.services.template.service.impl.other.BlacklistServiceImpl;
+import com.aigreentick.services.template.service.impl.other.ReportServiceImpl;
+import com.aigreentick.services.template.service.impl.other.UserServiceImpl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -259,8 +262,8 @@ public class SendTemplateOrchestratorServiceImpl {
                 .broadcastId(broadcastId)
                 .mobile(mobile)
                 .type("template")
-                .status("PENDING")
-                .messageStatus("QUEUED")
+                .status("pending")
+                .messageStatus("pending")
                 .platform(Platform.web)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())

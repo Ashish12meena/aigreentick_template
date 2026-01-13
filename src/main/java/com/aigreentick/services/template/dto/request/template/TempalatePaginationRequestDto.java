@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.dto.request;
+package com.aigreentick.services.template.dto.request.template;
 
 import jakarta.validation.constraints.Min;
 import lombok.Data;

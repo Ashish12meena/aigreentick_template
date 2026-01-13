@@ -7,7 +7,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.aigreentick.services.template.constants.TemplateConstants;
-import com.aigreentick.services.template.dto.request.SendTemplateRequestDto;
+import com.aigreentick.services.template.dto.request.template.SendTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.enums.ResponseStatus;

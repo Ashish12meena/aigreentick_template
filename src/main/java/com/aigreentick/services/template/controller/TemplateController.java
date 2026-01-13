@@ -10,7 +10,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.aigreentick.services.template.constants.TemplateConstants;
-import com.aigreentick.services.template.dto.request.TempalatePaginationRequestDto;
+import com.aigreentick.services.template.dto.request.template.TempalatePaginationRequestDto;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.enums.ResponseStatus;

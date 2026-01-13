@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.enums.ResponseStatus;
 import com.aigreentick.services.template.model.Report;
-import com.aigreentick.services.template.service.impl.ReportServiceImpl;
+import com.aigreentick.services.template.service.impl.other.ReportServiceImpl;
 
 import jakarta.validation.Valid;
 import lombok.Data;

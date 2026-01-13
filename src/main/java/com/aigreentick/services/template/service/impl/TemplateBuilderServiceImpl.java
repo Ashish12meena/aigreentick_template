@@ -36,7 +36,7 @@ import com.aigreentick.services.template.dto.build.TemplateDto;
 import com.aigreentick.services.template.dto.build.TemplateTextDto;
 import com.aigreentick.services.template.dto.build.TextParameter;
 import com.aigreentick.services.template.dto.build.Video;
-import com.aigreentick.services.template.dto.request.SendTemplateRequestDto;
+import com.aigreentick.services.template.dto.request.template.SendTemplateRequestDto;
 import com.aigreentick.services.template.enums.ButtonTypes;
 import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.enums.MediaType;

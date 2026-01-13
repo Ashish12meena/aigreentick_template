@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import com.aigreentick.services.template.dto.request.TemplateTextResponseDto;
-import com.aigreentick.services.template.dto.request.TemplateTextUpdateDefaultRequest;
+import com.aigreentick.services.template.dto.request.template.TemplateTextResponseDto;
+import com.aigreentick.services.template.dto.request.template.TemplateTextUpdateDefaultRequest;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.enums.ResponseStatus;
 import com.aigreentick.services.template.service.impl.TemplateTextServiceImpl;

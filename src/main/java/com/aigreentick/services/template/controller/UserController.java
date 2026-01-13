@@ -12,7 +12,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.enums.ResponseStatus;
 import com.aigreentick.services.template.model.User;
-import com.aigreentick.services.template.service.impl.UserServiceImpl;
+import com.aigreentick.services.template.service.impl.other.UserServiceImpl;
 
 import jakarta.validation.Valid;
 import lombok.Data;

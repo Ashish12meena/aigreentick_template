@@ -14,7 +14,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.enums.ResponseStatus;
 import com.aigreentick.services.template.model.Country;
-import com.aigreentick.services.template.service.impl.CountryServiceImpl;
+import com.aigreentick.services.template.service.impl.other.CountryServiceImpl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

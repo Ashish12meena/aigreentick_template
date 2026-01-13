@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import com.aigreentick.services.template.client.adapter.UserService;
 import com.aigreentick.services.template.client.adapter.WhatsappClientImpl;
-import com.aigreentick.services.template.dto.request.TemplateRequest;
+import com.aigreentick.services.template.dto.request.template.TemplateRequest;
 import com.aigreentick.services.template.dto.response.AccessTokenCredentials;
 import com.aigreentick.services.template.dto.response.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;

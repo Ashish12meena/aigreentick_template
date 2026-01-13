@@ -15,7 +15,7 @@ import org.springframework.web.bind.annotation.RestController;
 import com.aigreentick.services.template.dto.response.ResponseMessage;
 import com.aigreentick.services.template.enums.ResponseStatus;
 import com.aigreentick.services.template.model.Blacklist;
-import com.aigreentick.services.template.service.impl.BlacklistServiceImpl;
+import com.aigreentick.services.template.service.impl.other.BlacklistServiceImpl;
 
 import jakarta.validation.Valid;
 import lombok.Data;
