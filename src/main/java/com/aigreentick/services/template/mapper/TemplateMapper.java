@@ -31,16 +31,16 @@ import com.aigreentick.services.template.dto.request.template.TemplateComponentR
 import com.aigreentick.services.template.dto.request.template.TemplateExampleRequest;
 import com.aigreentick.services.template.dto.request.template.TemplateRequest;
 import com.aigreentick.services.template.dto.request.template.TemplateTextRequest;
-import com.aigreentick.services.template.dto.response.TemplateResponseDto;
+import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
 import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.enums.MediaFormat;
-import com.aigreentick.services.template.model.SupportedApp;
-import com.aigreentick.services.template.model.Template;
-import com.aigreentick.services.template.model.TemplateCarouselCard;
-import com.aigreentick.services.template.model.TemplateCarouselCardButton;
-import com.aigreentick.services.template.model.TemplateComponent;
-import com.aigreentick.services.template.model.TemplateComponentButton;
-import com.aigreentick.services.template.model.TemplateText;
+import com.aigreentick.services.template.model.template.SupportedApp;
+import com.aigreentick.services.template.model.template.Template;
+import com.aigreentick.services.template.model.template.TemplateCarouselCard;
+import com.aigreentick.services.template.model.template.TemplateCarouselCardButton;
+import com.aigreentick.services.template.model.template.TemplateComponent;
+import com.aigreentick.services.template.model.template.TemplateComponentButton;
+import com.aigreentick.services.template.model.template.TemplateText;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 

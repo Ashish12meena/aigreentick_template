@@ -4,10 +4,10 @@ import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 
-import com.aigreentick.services.template.client.config.MessagingClientProperties;
+import com.aigreentick.services.template.config.client.MessagingClientProperties;
 import com.aigreentick.services.template.dto.request.template.DispatchRequestDto;
-import com.aigreentick.services.template.dto.response.BroadcastDispatchResponseDto;
-import com.aigreentick.services.template.dto.response.FacebookApiResponse;
+import com.aigreentick.services.template.dto.response.broadcast.BroadcastDispatchResponseDto;
+import com.aigreentick.services.template.dto.response.common.FacebookApiResponse;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;

@@ -2,9 +2,9 @@ package com.aigreentick.services.template.mapper;
 
 import org.springframework.stereotype.Component;
 
-import com.aigreentick.services.template.dto.FileMetaData;
-import com.aigreentick.services.template.dto.response.ResumableMediaUploadResponseDto;
-import com.aigreentick.services.template.model.MediaResumable;
+import com.aigreentick.services.template.dto.response.media.ResumableMediaUploadResponseDto;
+import com.aigreentick.services.template.model.template.MediaResumable;
+import com.aigreentick.services.template.util.helper.FileMetaData;
 
 
 

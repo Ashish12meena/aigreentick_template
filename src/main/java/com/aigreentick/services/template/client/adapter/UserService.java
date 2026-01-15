@@ -2,9 +2,9 @@ package com.aigreentick.services.template.client.adapter;
 
 import org.springframework.stereotype.Service;
 
-import com.aigreentick.services.template.dto.response.AccessTokenCredentials;
-import com.aigreentick.services.template.model.WhatsappAccount;
-import com.aigreentick.services.template.service.impl.WhatsappAccountServiceImpl;
+import com.aigreentick.services.template.dto.response.common.AccessTokenCredentials;
+import com.aigreentick.services.template.model.account.WhatsappAccount;
+import com.aigreentick.services.template.service.impl.account.WhatsappAccountServiceImpl;
 
 import lombok.RequiredArgsConstructor;
 

@@ -15,11 +15,11 @@ import org.springframework.web.reactive.function.client.WebClient;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import com.aigreentick.services.template.client.config.WhatsappClientProperties;
-import com.aigreentick.services.template.dto.response.FacebookApiResponse;
-import com.aigreentick.services.template.dto.response.UploadMediaResponse;
-import com.aigreentick.services.template.dto.response.UploadOffsetResponse;
-import com.aigreentick.services.template.dto.response.UploadSessionResponse;
+import com.aigreentick.services.template.config.client.WhatsappClientProperties;
+import com.aigreentick.services.template.dto.response.common.FacebookApiResponse;
+import com.aigreentick.services.template.dto.response.media.UploadMediaResponse;
+import com.aigreentick.services.template.dto.response.media.UploadOffsetResponse;
+import com.aigreentick.services.template.dto.response.media.UploadSessionResponse;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import lombok.RequiredArgsConstructor;
