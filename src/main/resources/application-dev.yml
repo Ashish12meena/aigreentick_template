@@ -43,7 +43,16 @@ messaging-service:
 # ---------- Broadcast Configuration ----------
 broadcast:
   batch-size: 200          # For reports & contacts
-  dispatch-chunk-size: 100 # For messaging service dispatch
+  dispatch-chunk-size: 100 # For messaging service dispatch (per async chunk)
+
+# ---------- Async Dispatch Configuration ----------
+async:
+  dispatch:
+    core-pool-size: 10     # Core threads for steady load
+    max-pool-size: 20      # Max threads for burst load
+    queue-capacity: 100    # Queue size for pending tasks
+    thread-name-prefix: dispatch-
+    await-termination-seconds: 60
 
 # ---------- Template Configuration ----------
 template:

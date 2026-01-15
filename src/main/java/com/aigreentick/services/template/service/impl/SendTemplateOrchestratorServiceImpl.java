@@ -5,22 +5,15 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.concurrent.CompletableFuture;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import com.aigreentick.services.template.client.adapter.MessagingClientImpl;
-import com.aigreentick.services.template.dto.build.MessageRequest;
 import com.aigreentick.services.template.dto.build.TemplateDto;
 import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
-import com.aigreentick.services.template.dto.request.template.BroadcastDispatchItemDto;
-import com.aigreentick.services.template.dto.request.template.DispatchRequestDto;
 import com.aigreentick.services.template.dto.request.template.SendTemplateRequestDto;
-import com.aigreentick.services.template.dto.response.BroadcastDispatchResponseDto;
-import com.aigreentick.services.template.dto.response.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.TemplateResponseDto;
 import com.aigreentick.services.template.enums.Platform;
 import com.aigreentick.services.template.enums.TemplateCategory;
@@ -32,11 +25,10 @@ import com.aigreentick.services.template.model.Template;
 import com.aigreentick.services.template.model.User;
 import com.aigreentick.services.template.model.Wallet;
 import com.aigreentick.services.template.model.WhatsappAccount;
+import com.aigreentick.services.template.service.impl.AsyncBatchDispatcherService.DispatchSummary;
 import com.aigreentick.services.template.service.impl.other.BlacklistServiceImpl;
 import com.aigreentick.services.template.service.impl.other.ReportServiceImpl;
 import com.aigreentick.services.template.service.impl.other.UserServiceImpl;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,16 +45,11 @@ public class SendTemplateOrchestratorServiceImpl {
     private final BroadcastServiceImpl broadcastService;
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
-    private final TemplateBuilderServiceImpl templateBuilderService;
-    private final MessagingClientImpl messagingClient;
     private final ChatContactServiceImpl chatContactService;
-    private final ObjectMapper objectMapper;
+    private final AsyncBatchDispatcherService asyncBatchDispatcher;
 
     @Value("${broadcast.batch-size:200}")
     private int batchSize;
-
-    @Value("${broadcast.dispatch-chunk-size:100}")
-    private int dispatchChunkSize;
 
     @Transactional
     public TemplateResponseDto broadcastTemplate(SendTemplateRequestDto request, Long userId) {
@@ -116,17 +103,38 @@ public class SendTemplateOrchestratorServiceImpl {
         log.info("=== Creating chat contacts at: {} ===", LocalDateTime.now());
         createChatContactsInBatches(user.getId(), validNumbers, request.getCountryId());
 
-        // ========== STEP 11: Build Templates and Dispatch in Chunks ==========
-        log.info("=== Building and dispatching messages at: {} ===", LocalDateTime.now());
-        dispatchMessagesInChunks(userId, validNumbers, templateDto, request, broadcast.getId(), config);
+        // ========== STEP 11: Build Templates and Dispatch ASYNCHRONOUSLY ==========
+        log.info("=== Starting async dispatch at: {} ===", LocalDateTime.now());
+        
+        WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
+                .phoneNumberId(config.getWhatsappNoId())
+                .accessToken(config.getParmenentToken())
+                .build();
 
-        log.info("=== Broadcast completed successfully ===");
+        // Fire and forget - dispatch happens asynchronously in background
+        CompletableFuture<DispatchSummary> dispatchFuture = asyncBatchDispatcher.dispatchMessagesAsync(
+                userId, validNumbers, templateDto, request, broadcast.getId(), accountInfo);
+
+        // Optional: Add completion handler for logging/metrics
+        dispatchFuture.whenComplete((summary, throwable) -> {
+            if (throwable != null) {
+                log.error("Async dispatch failed for broadcastId: {}", broadcast.getId(), throwable);
+            } else {
+                log.info("=== Async dispatch completed for broadcastId: {} - Dispatched: {}, Failed: {} ===",
+                        broadcast.getId(), summary.dispatched(), summary.failed());
+            }
+        });
+
+        log.info("=== Broadcast initiated successfully - dispatching in background ===");
+        
         return TemplateResponseDto.builder()
                 .id(template.getId())
                 .name(template.getName())
                 .status("BROADCAST_INITIATED")
                 .build();
     }
+
+    // ==================== HELPER METHODS (unchanged) ====================
 
     private BigDecimal getPricePerMessage(Long userId, String templateCategory, User user) {
         Double charge;
@@ -227,7 +235,7 @@ public class SendTemplateOrchestratorServiceImpl {
 
             List<Report> reports = batch.stream()
                     .map(mobile -> createReport(userId, broadcastId, mobile))
-                    .collect(Collectors.toList());
+                    .toList();
 
             reportService.saveAll(reports);
 
@@ -269,123 +277,4 @@ public class SendTemplateOrchestratorServiceImpl {
                 .updatedAt(LocalDateTime.now())
                 .build();
     }
-
-    // ==================== CHUNKED DISPATCH ====================
-
-    private void dispatchMessagesInChunks(
-            Long userId,
-            List<String> validNumbers,
-            TemplateDto templateDto,
-            SendTemplateRequestDto request,
-            Long broadcastId,
-            WhatsappAccount whatsappAccount) {
-
-        log.info("Dispatching {} messages in chunks of {}", validNumbers.size(), dispatchChunkSize);
-
-        WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
-                .phoneNumberId(whatsappAccount.getWhatsappNoId())
-                .accessToken(whatsappAccount.getParmenentToken())
-                .build();
-
-        int totalChunks = (validNumbers.size() + dispatchChunkSize - 1) / dispatchChunkSize;
-        int totalDispatched = 0;
-        int totalFailed = 0;
-
-        for (int i = 0; i < validNumbers.size(); i += dispatchChunkSize) {
-            int end = Math.min(i + dispatchChunkSize, validNumbers.size());
-            List<String> chunk = validNumbers.subList(i, end);
-            int chunkNumber = (i / dispatchChunkSize) + 1;
-
-            log.debug("Processing dispatch chunk {}/{} ({} numbers)", chunkNumber, totalChunks, chunk.size());
-
-            try {
-                DispatchResult result = dispatchChunk(
-                        userId, chunk, templateDto, request, broadcastId, accountInfo);
-
-                totalDispatched += result.dispatched();
-                totalFailed += result.failed();
-
-                log.debug("Chunk {}/{} completed - Dispatched: {}, Failed: {}",
-                        chunkNumber, totalChunks, result.dispatched(), result.failed());
-
-            } catch (Exception e) {
-                log.error("Chunk {}/{} failed with error: {}", chunkNumber, totalChunks, e.getMessage(), e);
-                totalFailed += chunk.size();
-            }
-        }
-
-        log.info("Dispatch completed - Total Dispatched: {}, Total Failed: {}", totalDispatched, totalFailed);
-
-        if (totalFailed > 0 && totalDispatched == 0) {
-            throw new RuntimeException("All message dispatches failed for broadcastId: " + broadcastId);
-        }
-    }
-
-    private DispatchResult dispatchChunk(
-            Long userId,
-            List<String> phoneNumbers,
-            TemplateDto templateDto,
-            SendTemplateRequestDto request,
-            Long broadcastId,
-            WhatsappAccountInfoDto accountInfo) {
-
-        // Build message requests for this chunk
-        List<MessageRequest> messageRequests = templateBuilderService.buildSendableTemplates(
-                userId, phoneNumbers, templateDto, request);
-
-        // Convert to dispatch items
-        List<BroadcastDispatchItemDto> dispatchItems = buildDispatchItems(messageRequests, broadcastId);
-
-        if (dispatchItems.isEmpty()) {
-            log.warn("No dispatch items built for chunk - all serializations failed");
-            return new DispatchResult(0, phoneNumbers.size());
-        }
-
-        // Dispatch to messaging service
-        DispatchRequestDto dispatchRequest = DispatchRequestDto.builder()
-                .items(dispatchItems)
-                .accountInfo(accountInfo)
-                .build();
-
-        FacebookApiResponse<BroadcastDispatchResponseDto> response = messagingClient.dispatchMessage(dispatchRequest);
-
-        if (response.isSuccess() && response.getData() != null && response.getData().getData() != null) {
-            int dispatched = response.getData().getData().getTotalDispatched();
-            int failed = response.getData().getData().getFailedCount();
-            return new DispatchResult(dispatched, failed);
-        } else {
-            log.error("Dispatch failed: {}", response.getErrorMessage());
-            return new DispatchResult(0, dispatchItems.size());
-        }
-    }
-
-    private List<BroadcastDispatchItemDto> buildDispatchItems(
-            List<MessageRequest> messageRequests,
-            Long broadcastId) {
-
-        return messageRequests.stream()
-                .map(msg -> {
-                    try {
-                        String payload = objectMapper
-                                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                                .writeValueAsString(msg);
-
-                        return BroadcastDispatchItemDto.builder()
-                                .broadcastId(broadcastId)
-                                .mobileNo(msg.getTo())
-                                .payload(payload)
-                                .build();
-
-                    } catch (Exception e) {
-                        log.error("Error serializing message for {}: {}", msg.getTo(), e.getMessage());
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
-    // ==================== RECORD FOR DISPATCH RESULT ====================
-
-    private record DispatchResult(int dispatched, int failed) {}
 }
