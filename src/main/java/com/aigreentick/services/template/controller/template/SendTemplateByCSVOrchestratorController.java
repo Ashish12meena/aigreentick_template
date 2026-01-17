@@ -24,18 +24,18 @@ import lombok.extern.slf4j.Slf4j;
 public class SendTemplateByCSVOrchestratorController {
     private final SendTemplateByCSVOrchestratorServiceImpl sendTemplateByCSVOrchestratorServiceImpl;
 
-    //     @PostMapping("/broadcast")
-    // public ResponseEntity<?> createTemplate(
-    //         @RequestBody SendTemplateByCsvRequestDto request) {
+        @PostMapping("/broadcast")
+    public ResponseEntity<?> createTemplate(
+            @RequestBody SendTemplateByCsvRequestDto request) {
 
-    //     log.info("broadcasting template ");
+        log.info("broadcasting template ");
 
-    //     Long userId = 1L;
+        Long userId = 1L;
 
-    //     TemplateResponseDto response = sendTemplateByCSVOrchestratorServiceImpl.broadcastTemplate(request, userId);
+        TemplateResponseDto response = sendTemplateByCSVOrchestratorServiceImpl.broadcastTemplate(request, userId);
 
-    //     return ResponseEntity
-    //             .ok(new ResponseMessage<>(ResponseStatus.SUCCESS.name(), TemplateConstants.Messages.TEMPLATE_CREATED,
-    //                     response));
-    // }
+        return ResponseEntity
+                .ok(new ResponseMessage<>(ResponseStatus.SUCCESS.name(), TemplateConstants.Messages.TEMPLATE_CREATED,
+                        response));
+    }
 }
