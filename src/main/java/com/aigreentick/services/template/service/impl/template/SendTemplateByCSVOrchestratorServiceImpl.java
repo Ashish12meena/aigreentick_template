@@ -5,16 +5,23 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import com.aigreentick.services.template.client.adapter.MessagingClientImpl;
+import com.aigreentick.services.template.dto.build.MessageRequest;
 import com.aigreentick.services.template.dto.build.TemplateDto;
 import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
-import com.aigreentick.services.template.dto.request.template.SendTemplateRequestDto;
+import com.aigreentick.services.template.dto.request.template.BroadcastDispatchItemDto;
+import com.aigreentick.services.template.dto.request.template.DispatchRequestDto;
 import com.aigreentick.services.template.dto.request.template.csv.SendTemplateByCsvRequestDto;
+import com.aigreentick.services.template.dto.response.broadcast.BroadcastDispatchResponseDto;
+import com.aigreentick.services.template.dto.response.common.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
 import com.aigreentick.services.template.enums.Platform;
 import com.aigreentick.services.template.enums.TemplateCategory;
@@ -28,13 +35,13 @@ import com.aigreentick.services.template.model.common.Wallet;
 import com.aigreentick.services.template.model.template.Template;
 import com.aigreentick.services.template.service.impl.account.UserServiceImpl;
 import com.aigreentick.services.template.service.impl.account.WhatsappAccountServiceImpl;
-import com.aigreentick.services.template.service.impl.broadcast.AsyncBatchDispatcherService;
-import com.aigreentick.services.template.service.impl.broadcast.AsyncBatchDispatcherService.DispatchSummary;
 import com.aigreentick.services.template.service.impl.broadcast.BroadcastServiceImpl;
 import com.aigreentick.services.template.service.impl.broadcast.ReportServiceImpl;
 import com.aigreentick.services.template.service.impl.common.WalletServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.BlacklistServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.ChatContactServiceImpl;
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -43,6 +50,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @RequiredArgsConstructor
 public class SendTemplateByCSVOrchestratorServiceImpl {
+
     private final WhatsappAccountServiceImpl whatsappAccountService;
     private final TemplateServiceImpl templateService;
     private final TemplateMapper templateMapper;
@@ -52,14 +60,19 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
     private final ChatContactServiceImpl chatContactService;
-    private final AsyncBatchDispatcherService asyncBatchDispatcher;
+    private final TemplateBuilderForCsvServiceImpl csvTemplateBuilder;
+    private final MessagingClientImpl messagingClient;
+    private final ObjectMapper objectMapper;
 
     @Value("${broadcast.batch-size:200}")
     private int batchSize;
 
+    @Value("${broadcast.dispatch-chunk-size:100}")
+    private int dispatchChunkSize;
+
     @Transactional
     public TemplateResponseDto broadcastTemplate(SendTemplateByCsvRequestDto request, Long userId) {
-        log.info("=== Starting broadcast for userId: {} ===", userId);
+        log.info("=== Starting CSV broadcast for userId: {} ===", userId);
 
         // ========== STEP 1: Get User & WhatsApp Configuration ==========
         User user = userService.getActiveUserById(userId);
@@ -72,13 +85,16 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         // ========== STEP 3: Calculate Pricing ==========
         BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
 
-        // ========== STEP 4: Filter Blacklisted Numbers ==========
-        List<String> validNumbers = filterBlacklistedNumbers(userId, request.getMobileNumbers());
-        log.info("Filtered numbers: {} valid out of {} total",
-                validNumbers.size(), request.getMobileNumbers().size());
+        // ========== STEP 4: Convert mobile numbers to strings & filter blacklist ==========
+        List<String> mobileStrings = request.getMobileNumbers().stream()
+                .map(String::valueOf)
+                .collect(Collectors.toList());
+
+        List<String> validNumbers = blacklistService.filterBlockedNumbers(userId, mobileStrings);
+        log.info("Filtered: {} valid out of {} total", validNumbers.size(), mobileStrings.size());
 
         if (validNumbers.isEmpty()) {
-            throw new IllegalArgumentException("No valid numbers to broadcast after filtering blacklist");
+            throw new IllegalArgumentException("No valid numbers after blacklist filtering");
         }
 
         // ========== STEP 5: Validate Wallet Balance ==========
@@ -86,53 +102,49 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         if (BigDecimal.valueOf(user.getBalance()).compareTo(totalDeduction) < 0) {
             throw new InsufficientBalanceException(
                     String.format("Insufficient balance. Required: %.2f, Available: %.2f",
-                            totalDeduction, user.getBalance()),
-                    402);
+                            totalDeduction, user.getBalance()), 402);
         }
 
         // ========== STEP 6: Create Broadcast Record ==========
-        Broadcast broadcast = createBroadcastRecord(request, user, config, validNumbers, template);
+        Broadcast broadcast = createBroadcastRecord(request, user, validNumbers, template);
 
-        // ========== STEP 7: Create Broadcast Media (if applicable) ==========
-        if (Boolean.TRUE.equals(request.getIsMedia())) {
-            createBroadcastMedia(broadcast, request);
-        }
-
-        // ========== STEP 8: Deduct Wallet Balance ==========
+        // ========== STEP 7: Deduct Wallet Balance ==========
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // ========== STEP 9: Create Reports in Batches (REPORTS FIRST) ==========
-        log.info("=== Creating reports at: {} ===", LocalDateTime.now());
+        // ========== STEP 8: Create Reports ==========
+        log.info("Creating reports at: {}", LocalDateTime.now());
         createReportsInBatches(user.getId(), broadcast.getId(), validNumbers);
 
-        // ========== STEP 10: Create Chat Contacts for ALL Numbers (AFTER REPORTS)
-        // ==========
-        log.info("=== Creating chat contacts at: {} ===", LocalDateTime.now());
-        createChatContactsInBatches(user.getId(), validNumbers, request.getCountryId());
+        // ========== STEP 9: Create Chat Contacts ==========
+        log.info("Creating chat contacts at: {}", LocalDateTime.now());
+        Long countryId = request.getCountryId() != null ? request.getCountryId().longValue() : null;
+        createChatContactsInBatches(user.getId(), validNumbers, countryId);
 
-        // ========== STEP 11: Build Templates and Dispatch ASYNCHRONOUSLY ==========
-        log.info("=== Starting async dispatch at: {} ===", LocalDateTime.now());
+        // ========== STEP 10: Build & Dispatch Messages ASYNCHRONOUSLY ==========
+        log.info("Starting async dispatch at: {}", LocalDateTime.now());
 
         WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
                 .phoneNumberId(config.getWhatsappNoId())
                 .accessToken(config.getParmenentToken())
                 .build();
 
-        // Fire and forget - dispatch happens asynchronously in background
-        CompletableFuture<DispatchSummary> dispatchFuture = asyncBatchDispatcher.dispatchMessagesAsync(
-                userId, validNumbers, templateDto, request, broadcast.getId(), accountInfo);
-
-        // Optional: Add completion handler for logging/metrics
-        dispatchFuture.whenComplete((summary, throwable) -> {
-            if (throwable != null) {
-                log.error("Async dispatch failed for broadcastId: {}", broadcast.getId(), throwable);
+        // Fire async dispatch
+        CompletableFuture.runAsync(() -> {
+            try {
+                dispatchMessagesInChunks(userId, validNumbers, templateDto, request, 
+                        broadcast.getId(), accountInfo);
+            } catch (Exception e) {
+                log.error("Async dispatch failed for broadcastId: {}", broadcast.getId(), e);
+            }
+        }).whenComplete((result, ex) -> {
+            if (ex != null) {
+                log.error("Dispatch completed with error for broadcastId: {}", broadcast.getId(), ex);
             } else {
-                log.info("=== Async dispatch completed for broadcastId: {} - Dispatched: {}, Failed: {} ===",
-                        broadcast.getId(), summary.dispatched(), summary.failed());
+                log.info("Dispatch completed for broadcastId: {}", broadcast.getId());
             }
         });
 
-        log.info("=== Broadcast initiated successfully - dispatching in background ===");
+        log.info("=== CSV Broadcast initiated - dispatching in background ===");
 
         return TemplateResponseDto.builder()
                 .id(template.getId())
@@ -141,62 +153,143 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                 .build();
     }
 
-    // ==================== HELPER METHODS (unchanged) ====================
+    /**
+     * Dispatch messages in chunks using CSV template builder
+     */
+    private void dispatchMessagesInChunks(
+            Long userId,
+            List<String> validNumbers,
+            TemplateDto templateDto,
+            SendTemplateByCsvRequestDto request,
+            Long broadcastId,
+            WhatsappAccountInfoDto accountInfo) {
 
-    private BigDecimal getPricePerMessage(Long userId, String templateCategory, User user) {
-        Double charge;
+        log.info("Dispatching {} messages in chunks of {}", validNumbers.size(), dispatchChunkSize);
 
-        switch (TemplateCategory.valueOf(templateCategory)) {
-            case AUTHENTICATION -> charge = user.getAuthMsgCharge();
-            case UTILITY -> charge = user.getUtiltyMsgCharge();
-            case MARKETING -> charge = user.getMarketMsgCharge();
-            default -> throw new IllegalArgumentException(
-                    "Unsupported template category: " + templateCategory);
+        int totalChunks = (validNumbers.size() + dispatchChunkSize - 1) / dispatchChunkSize;
+        int totalDispatched = 0;
+        int totalFailed = 0;
+
+        for (int i = 0; i < validNumbers.size(); i += dispatchChunkSize) {
+            int end = Math.min(i + dispatchChunkSize, validNumbers.size());
+            List<String> chunk = validNumbers.subList(i, end);
+            int chunkNum = (i / dispatchChunkSize) + 1;
+
+            log.info("Processing chunk {}/{} with {} numbers", chunkNum, totalChunks, chunk.size());
+
+            try {
+                // Build messages using CSV template builder
+                List<MessageRequest> messages = csvTemplateBuilder.buildSendableTemplatesFromCsv(
+                        userId, chunk, templateDto, request);
+
+                // Convert to dispatch items
+                List<BroadcastDispatchItemDto> items = messages.stream()
+                        .map(msg -> toDispatchItem(msg, broadcastId))
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList());
+
+                if (items.isEmpty()) {
+                    log.warn("Chunk {}/{} produced no dispatch items", chunkNum, totalChunks);
+                    totalFailed += chunk.size();
+                    continue;
+                }
+
+                // Dispatch to messaging service
+                DispatchRequestDto dispatchRequest = DispatchRequestDto.builder()
+                        .items(items)
+                        .accountInfo(accountInfo)
+                        .build();
+
+                FacebookApiResponse<BroadcastDispatchResponseDto> response = 
+                        messagingClient.dispatchMessage(dispatchRequest);
+
+                if (response.isSuccess() && response.getData() != null 
+                        && response.getData().getData() != null) {
+                    int dispatched = response.getData().getData().getTotalDispatched();
+                    int failed = response.getData().getData().getFailedCount();
+                    totalDispatched += dispatched;
+                    totalFailed += failed;
+                    log.info("Chunk {}/{} - Dispatched: {}, Failed: {}", 
+                            chunkNum, totalChunks, dispatched, failed);
+                } else {
+                    totalFailed += items.size();
+                    log.error("Chunk {}/{} failed: {}", chunkNum, totalChunks, response.getErrorMessage());
+                }
+
+            } catch (Exception e) {
+                totalFailed += chunk.size();
+                log.error("Chunk {}/{} threw exception", chunkNum, totalChunks, e);
+            }
         }
+
+        log.info("=== Dispatch completed - Total Dispatched: {}, Total Failed: {} ===", 
+                totalDispatched, totalFailed);
+    }
+
+    private BroadcastDispatchItemDto toDispatchItem(MessageRequest msg, Long broadcastId) {
+        try {
+            String payload = objectMapper
+                    .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                    .writeValueAsString(msg);
+
+            return BroadcastDispatchItemDto.builder()
+                    .broadcastId(broadcastId)
+                    .mobileNo(msg.getTo())
+                    .payload(payload)
+                    .build();
+        } catch (Exception e) {
+            log.error("Failed to serialize message for {}: {}", msg.getTo(), e.getMessage());
+            return null;
+        }
+    }
+
+    // ==================== HELPER METHODS ====================
+
+    private BigDecimal getPricePerMessage(Long userId, String category, User user) {
+        Double charge = switch (TemplateCategory.valueOf(category)) {
+            case AUTHENTICATION -> user.getAuthMsgCharge();
+            case UTILITY -> user.getUtiltyMsgCharge();
+            case MARKETING -> user.getMarketMsgCharge();
+        };
 
         if (charge == null || charge <= 0) {
-            throw new IllegalStateException(
-                    "Charge not configured for userId=" + userId + ", category=" + templateCategory);
+            throw new IllegalStateException("Charge not configured for userId=" + userId + ", category=" + category);
         }
-
         return BigDecimal.valueOf(charge);
     }
 
-    private List<String> filterBlacklistedNumbers(Long userId, List<String> mobileNumbers) {
-        return blacklistService.filterBlockedNumbers(userId, mobileNumbers);
-    }
-
-    private Broadcast createBroadcastRecord(
-            SendTemplateByCsvRequestDto request,
-            User user,
-            WhatsappAccount config,
-            List<String> validNumbers,
-            Template template) {
+    private Broadcast createBroadcastRecord(SendTemplateByCsvRequestDto request, User user,
+            List<String> validNumbers, Template template) {
 
         log.info("Creating broadcast record for {} numbers", validNumbers.size());
 
         Map<String, Object> data = new HashMap<>();
         data.put("template_name", template.getName());
-        data.put("language_code", "en_Us");
+        data.put("language_code", template.getLanguage());
         data.put("is_media", request.getIsMedia());
-        // if (request.getIsMedia() != null && request.getIsMedia()) {
-        //     data.put("media_id", request.getMediaId());
-        //     data.put("media_type", request.getMediaType());
-        // }
+        data.put("source", "CSV");
+
+        LocalDateTime scheduleAt = null;
+        if (request.getScheduleDate() != null && !request.getScheduleDate().isBlank()) {
+            try {
+                scheduleAt = LocalDateTime.parse(request.getScheduleDate());
+            } catch (Exception e) {
+                log.warn("Could not parse schedule date: {}", request.getScheduleDate());
+            }
+        }
 
         Broadcast broadcast = Broadcast.builder()
                 .userId(user.getId())
                 .templateId(template.getId())
-                // .countryId(request.getCountryId())
+                .countryId(request.getCountryId() != null ? request.getCountryId().longValue() : null)
                 .campname(request.getCampName())
-                .isMedia(request.getIsMedia() != null && request.getIsMedia() ? "1" : "0")
+                .isMedia(Boolean.TRUE.equals(request.getIsMedia()) ? "1" : "0")
                 .data(data)
                 .total(validNumbers.size())
-                .scheduleAt(request.getScheduleDate() != null
-                        ? LocalDateTime.ofInstant(request.getScheduleDate(), java.time.ZoneId.systemDefault())
-                        : null)
+                .scheduleAt(scheduleAt)
                 .status("1")
                 .numbers(String.join(",", validNumbers))
+                .source("CSV")
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -204,14 +297,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         return broadcastService.save(broadcast);
     }
 
-    private void createBroadcastMedia(Broadcast broadcast, SendTemplateRequestDto request) {
-        log.info("Creating broadcast media record for broadcastId: {}", broadcast.getId());
-        // Implementation for broadcast media if needed
-    }
-
     private void deductWalletBalance(User user, BigDecimal totalDeduction, Long broadcastId) {
-        log.info("Deducting {} from userId: {} for broadcastId: {}",
-                totalDeduction, user.getId(), broadcastId);
+        log.info("Deducting {} from userId: {} for broadcastId: {}", totalDeduction, user.getId(), broadcastId);
 
         userService.deductBalance(user.getId(), totalDeduction.doubleValue());
 
@@ -221,8 +308,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                 .amount(totalDeduction.doubleValue())
                 .type(Wallet.WalletType.debit)
                 .status("1")
-                .description("Broadcast message charges")
-                .transection("BROADCAST_" + broadcastId)
+                .description("CSV Broadcast message charges")
+                .transection("BROADCAST_CSV_" + broadcastId)
                 .broadcastId(broadcastId.intValue())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -231,58 +318,39 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         walletService.save(wallet);
     }
 
-    private void createReportsInBatches(Long userId, Long broadcastId, List<String> validNumbers) {
-        log.info("Creating reports for {} numbers in batches of {}", validNumbers.size(), batchSize);
+    private void createReportsInBatches(Long userId, Long broadcastId, List<String> numbers) {
+        log.info("Creating reports for {} numbers in batches of {}", numbers.size(), batchSize);
 
-        int totalBatches = (validNumbers.size() + batchSize - 1) / batchSize;
-
-        for (int i = 0; i < validNumbers.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, validNumbers.size());
-            List<String> batch = validNumbers.subList(i, end);
+        for (int i = 0; i < numbers.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, numbers.size());
+            List<String> batch = numbers.subList(i, end);
 
             List<Report> reports = batch.stream()
-                    .map(mobile -> createReport(userId, broadcastId, mobile))
+                    .map(mobile -> Report.builder()
+                            .userId(userId)
+                            .broadcastId(broadcastId)
+                            .mobile(mobile)
+                            .type("template")
+                            .status("pending")
+                            .messageStatus("pending")
+                            .platform(Platform.web)
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
+                            .build())
                     .toList();
 
             reportService.saveAll(reports);
-
-            log.debug("Saved report batch {}/{} ({} reports)",
-                    (i / batchSize) + 1, totalBatches, reports.size());
         }
-
-        log.info("Successfully created {} reports", validNumbers.size());
+        log.info("Created {} reports", numbers.size());
     }
 
-    private void createChatContactsInBatches(Long userId, List<String> mobileNumbers, Long countryId) {
-        log.info("Creating chat contacts for {} numbers in batches of {}", mobileNumbers.size(), batchSize);
+    private void createChatContactsInBatches(Long userId, List<String> numbers, Long countryId) {
+        log.info("Creating contacts for {} numbers in batches of {}", numbers.size(), batchSize);
 
-        int totalBatches = (mobileNumbers.size() + batchSize - 1) / batchSize;
-
-        for (int i = 0; i < mobileNumbers.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, mobileNumbers.size());
-            List<String> batch = mobileNumbers.subList(i, end);
-
-            chatContactService.ensureContactsExist(userId, batch, countryId);
-
-            log.debug("Created contacts batch {}/{} ({} contacts)",
-                    (i / batchSize) + 1, totalBatches, batch.size());
+        for (int i = 0; i < numbers.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, numbers.size());
+            chatContactService.ensureContactsExist(userId, numbers.subList(i, end), countryId);
         }
-
-        log.info("Successfully ensured {} chat contacts exist", mobileNumbers.size());
+        log.info("Ensured {} contacts exist", numbers.size());
     }
-
-    private Report createReport(Long userId, Long broadcastId, String mobile) {
-        return Report.builder()
-                .userId(userId)
-                .broadcastId(broadcastId)
-                .mobile(mobile)
-                .type("template")
-                .status("pending")
-                .messageStatus("pending")
-                .platform(Platform.web)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
 }

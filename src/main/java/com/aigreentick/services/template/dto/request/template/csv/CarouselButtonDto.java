@@ -4,14 +4,40 @@ import java.util.Map;
 
 import lombok.Data;
 
+/**
+ * Represents a carousel card button's parameters from CSV request.
+ */
 @Data
 public class CarouselButtonDto {
 
+    /**
+     * Optional ID for tracking
+     */
     private Long id;
-    private String type; // QUICK_REPLY, URL
+    
+    /**
+     * Button type: QUICK_REPLY, URL
+     */
+    private String type;
+    
+    /**
+     * Button text (optional - template already has this)
+     */
     private String text;
-    private String url; // nullable
+    
+    /**
+     * URL template (optional - template already has this)
+     */
+    private String url;
 
-    // only present for URL buttons
+    /**
+     * Variables for URL buttons (dynamic URL suffix)
+     * Key: Variable index as string (1-based, e.g., "1")
+     * Value: The value to substitute in URL
+     * 
+     * Example: For URL "https://example.com/product/{{1}}"
+     * variables: {"1": "SKU-12345"}
+     * Result: "https://example.com/product/SKU-12345"
+     */
     private Map<String, String> variables;
 }
