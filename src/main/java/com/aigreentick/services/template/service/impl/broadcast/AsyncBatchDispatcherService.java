@@ -2,27 +2,20 @@ package com.aigreentick.services.template.service.impl.broadcast;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import com.aigreentick.services.template.client.adapter.MessagingClientImpl;
-import com.aigreentick.services.template.dto.build.MessageRequest;
-import com.aigreentick.services.template.dto.build.TemplateDto;
+
 import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
 import com.aigreentick.services.template.dto.request.template.BroadcastDispatchItemDto;
 import com.aigreentick.services.template.dto.request.template.DispatchRequestDto;
-import com.aigreentick.services.template.dto.request.template.SendTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.broadcast.BroadcastDispatchResponseDto;
 import com.aigreentick.services.template.dto.response.common.FacebookApiResponse;
-import com.aigreentick.services.template.service.impl.template.TemplateBuilderServiceImpl;
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -38,180 +31,129 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class AsyncBatchDispatcherService {
 
-    private final TemplateBuilderServiceImpl templateBuilderService;
     private final MessagingClientImpl messagingClient;
-    private final ObjectMapper objectMapper;
 
     @Value("${broadcast.dispatch-chunk-size:100}")
     private int dispatchChunkSize;
 
     /**
-     * Dispatch messages in concurrent batches using CompletableFuture.
+     * Dispatch all items asynchronously in chunks.
+     * Fire-and-forget approach - doesn't wait for previous chunk to complete.
      * 
-     * @return CompletableFuture<DispatchSummary> with total dispatched/failed counts
+     * @param allItems    Pre-built dispatch items (already serialized)
+     * @param accountInfo WhatsApp account info
+     * @param broadcastId Broadcast ID for logging
+     * @return CompletableFuture that completes when all chunks are submitted
      */
-    public CompletableFuture<DispatchSummary> dispatchMessagesAsync(
-            Long userId,
-            List<String> validNumbers,
-            TemplateDto templateDto,
-            SendTemplateRequestDto request,
-            Long broadcastId,
-            WhatsappAccountInfoDto accountInfo) {
+    public CompletableFuture<Void> dispatchAsync(
+            List<BroadcastDispatchItemDto> allItems,
+            WhatsappAccountInfoDto accountInfo,
+            Long broadcastId) {
 
-        log.info("=== Starting async dispatch for {} numbers in chunks of {} ===", 
-                validNumbers.size(), dispatchChunkSize);
+        log.info("Starting async dispatch for {} pre-built items in chunks of {}",
+                allItems.size(), dispatchChunkSize);
 
-        // Split numbers into chunks
-        List<List<String>> chunks = partitionList(validNumbers, dispatchChunkSize);
+        // Split into chunks
+        List<List<BroadcastDispatchItemDto>> chunks = partitionList(allItems, dispatchChunkSize);
         int totalChunks = chunks.size();
-        
-        log.info("Created {} chunks for async processing", totalChunks);
 
         // Track progress
-        AtomicInteger chunkCounter = new AtomicInteger(0);
+        AtomicInteger completedChunks = new AtomicInteger(0);
         AtomicInteger totalDispatched = new AtomicInteger(0);
         AtomicInteger totalFailed = new AtomicInteger(0);
 
-        // Create async tasks for each chunk
-        List<CompletableFuture<ChunkResult>> chunkFutures = chunks.stream()
-                .map(chunk -> dispatchChunkAsync(
-                        userId, 
-                        chunk, 
-                        templateDto, 
-                        request, 
-                        broadcastId, 
-                        accountInfo,
-                        chunkCounter.incrementAndGet(),
-                        totalChunks))
-                .collect(Collectors.toList());
+        // Create futures for all chunks (fire them all immediately)
+        List<CompletableFuture<ChunkResult>> chunkFutures = new ArrayList<>();
 
-        // Combine all futures and aggregate results
+        for (int i = 0; i < chunks.size(); i++) {
+            int chunkNum = i + 1;
+            List<BroadcastDispatchItemDto> chunk = chunks.get(i);
+
+            CompletableFuture<ChunkResult> future = dispatchChunkAsync(
+                    chunk, accountInfo, chunkNum, totalChunks, broadcastId);
+
+            chunkFutures.add(future);
+        }
+
+        // Combine all futures and return Void
         return CompletableFuture.allOf(chunkFutures.toArray(new CompletableFuture[0]))
-                .thenApply(v -> {
-                    // Collect results from all chunks
-                    chunkFutures.forEach(future -> {
+                .thenRun(() -> {
+                    // Aggregate results
+                    for (CompletableFuture<ChunkResult> future : chunkFutures) {
                         try {
                             ChunkResult result = future.join();
                             totalDispatched.addAndGet(result.dispatched());
                             totalFailed.addAndGet(result.failed());
+                            completedChunks.incrementAndGet();
                         } catch (Exception e) {
                             log.error("Error collecting chunk result", e);
+                            totalFailed.addAndGet(dispatchChunkSize);
                         }
-                    });
+                    }
 
-                    DispatchSummary summary = new DispatchSummary(
-                            totalDispatched.get(), 
-                            totalFailed.get(),
-                            validNumbers.size()
-                    );
-
-                    log.info("=== Async dispatch completed - Dispatched: {}, Failed: {}, Total: {} ===",
-                            summary.dispatched(), summary.failed(), summary.total());
-
-                    return summary;
+                    log.info("=== Dispatch Summary for broadcastId: {} ===", broadcastId);
+                    log.info("Total Dispatched: {}", totalDispatched.get());
+                    log.info("Total Failed: {}", totalFailed.get());
+                    log.info("Chunks Completed: {}/{}", completedChunks.get(), totalChunks);
                 })
                 .exceptionally(ex -> {
-                    log.error("Fatal error during async dispatch", ex);
-                    return new DispatchSummary(0, validNumbers.size(), validNumbers.size());
+                    log.error("Fatal error during dispatch aggregation for broadcastId: {}", broadcastId, ex);
+                    return null;
                 });
     }
 
     /**
      * Dispatch a single chunk asynchronously.
-     * Annotated with @Async to run in separate thread pool.
+     * Each chunk runs independently - no waiting for others.
      */
     @Async("messageDispatchExecutor")
     public CompletableFuture<ChunkResult> dispatchChunkAsync(
-            Long userId,
-            List<String> phoneNumbers,
-            TemplateDto templateDto,
-            SendTemplateRequestDto request,
-            Long broadcastId,
+            List<BroadcastDispatchItemDto> chunk,
             WhatsappAccountInfoDto accountInfo,
-            int chunkNumber,
-            int totalChunks) {
+            int chunkNum,
+            int totalChunks,
+            Long broadcastId) {
 
         return CompletableFuture.supplyAsync(() -> {
-            log.info("Thread [{}] - Processing chunk {}/{} with {} numbers",
-                    Thread.currentThread().getName(), chunkNumber, totalChunks, phoneNumbers.size());
+            String threadName = Thread.currentThread().getName();
+            log.info("[{}] Processing chunk {}/{} with {} pre-built items for broadcastId: {}",
+                    threadName, chunkNum, totalChunks, chunk.size(), broadcastId);
 
             try {
-                // Build message requests
-                List<MessageRequest> messageRequests = templateBuilderService.buildSendableTemplates(
-                        userId, phoneNumbers, templateDto, request);
-
-                // Convert to dispatch items
-                List<BroadcastDispatchItemDto> dispatchItems = buildDispatchItems(
-                        messageRequests, broadcastId);
-
-                if (dispatchItems.isEmpty()) {
-                    log.warn("Chunk {}/{} - No dispatch items built", chunkNumber, totalChunks);
-                    return new ChunkResult(0, phoneNumbers.size(), chunkNumber);
-                }
-
-                // Dispatch to messaging service
+                // Items are already serialized - just send to messaging service
                 DispatchRequestDto dispatchRequest = DispatchRequestDto.builder()
-                        .items(dispatchItems)
+                        .items(chunk)
                         .accountInfo(accountInfo)
                         .build();
 
-                FacebookApiResponse<BroadcastDispatchResponseDto> response = 
-                        messagingClient.dispatchMessage(dispatchRequest);
+                FacebookApiResponse<BroadcastDispatchResponseDto> response = messagingClient
+                        .dispatchMessage(dispatchRequest);
 
-                if (response.isSuccess() && response.getData() != null && 
-                        response.getData().getData() != null) {
-                    
+                if (response.isSuccess() && response.getData() != null
+                        && response.getData().getData() != null) {
+
                     int dispatched = response.getData().getData().getTotalDispatched();
                     int failed = response.getData().getData().getFailedCount();
 
-                    log.info("Chunk {}/{} completed - Dispatched: {}, Failed: {}",
-                            chunkNumber, totalChunks, dispatched, failed);
+                    log.info("[{}] Chunk {}/{} completed - Dispatched: {}, Failed: {}",
+                            threadName, chunkNum, totalChunks, dispatched, failed);
 
-                    return new ChunkResult(dispatched, failed, chunkNumber);
+                    return new ChunkResult(dispatched, failed, chunkNum);
                 } else {
-                    log.error("Chunk {}/{} failed: {}", 
-                            chunkNumber, totalChunks, response.getErrorMessage());
-                    return new ChunkResult(0, dispatchItems.size(), chunkNumber);
+                    log.error("[{}] Chunk {}/{} failed: {}",
+                            threadName, chunkNum, totalChunks, response.getErrorMessage());
+                    return new ChunkResult(0, chunk.size(), chunkNum);
                 }
 
             } catch (Exception e) {
-                log.error("Chunk {}/{} threw exception", chunkNumber, totalChunks, e);
-                return new ChunkResult(0, phoneNumbers.size(), chunkNumber);
+                log.error("[{}] Chunk {}/{} threw exception", threadName, chunkNum, totalChunks, e);
+                return new ChunkResult(0, chunk.size(), chunkNum);
             }
         });
     }
 
     /**
-     * Build dispatch items from message requests
-     */
-    private List<BroadcastDispatchItemDto> buildDispatchItems(
-            List<MessageRequest> messageRequests,
-            Long broadcastId) {
-
-        return messageRequests.stream()
-                .map(msg -> {
-                    try {
-                        String payload = objectMapper
-                                .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                                .writeValueAsString(msg);
-
-                        return BroadcastDispatchItemDto.builder()
-                                .broadcastId(broadcastId)
-                                .mobileNo(msg.getTo())
-                                .payload(payload)
-                                .build();
-
-                    } catch (Exception e) {
-                        log.error("Error serializing message for {}: {}", msg.getTo(), e.getMessage());
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .collect(Collectors.toList());
-    }
-
-    /**
-     * Partition list into chunks of specified size
+     * Partition list into chunks
      */
     private <T> List<List<T>> partitionList(List<T> list, int chunkSize) {
         List<List<T>> partitions = new ArrayList<>();
@@ -222,15 +164,10 @@ public class AsyncBatchDispatcherService {
         return partitions;
     }
 
-    // ==================== RESULT RECORDS ====================
-
     /**
-     * Result for a single chunk dispatch
+     * Result record for a single chunk
      */
-    public record ChunkResult(int dispatched, int failed, int chunkNumber) {}
+    public record ChunkResult(int dispatched, int failed, int chunkNumber) {
+    }
 
-    /**
-     * Overall dispatch summary
-     */
-    public record DispatchSummary(int dispatched, int failed, int total) {}
 }
