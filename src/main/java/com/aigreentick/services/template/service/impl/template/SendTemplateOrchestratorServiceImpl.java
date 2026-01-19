@@ -90,7 +90,7 @@ public class SendTemplateOrchestratorServiceImpl {
         // Step 1-3: Load required entities
         User user = userService.getUserById(userId);
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
-        Template template = templateService.getTemplateById(request.getTemlateId());
+        Template template = templateService.getTemplateById(request.getTemplateId());
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
         
         // Step 4: Get price based on template category (AUTH/UTILITY/MARKETING)
@@ -259,7 +259,7 @@ public class SendTemplateOrchestratorServiceImpl {
                 .userId(user.getId())
                 .templateId(template.getId())
                 .countryId(request.getCountryId())
-                .campname(request.getCampanyName())
+                .campname(request.getCampName())
                 .isMedia(request.getIsMedia() != null && request.getIsMedia() ? "1" : "0")
                 .data(data)
                 .total(validNumbers.size())

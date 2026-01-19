@@ -4,18 +4,17 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 
 import jakarta.validation.constraints.Future;
 import lombok.Data;
 
 @Data
 public class SendTemplateRequestDto {
-    private Long temlateId;
 
-    @JsonProperty("campName")
-    private String campanyName;
-    
+    private Long templateId;
+
+    private String campName;
+
     private Long countryId;
     private List<String> mobileNumbers;
 
