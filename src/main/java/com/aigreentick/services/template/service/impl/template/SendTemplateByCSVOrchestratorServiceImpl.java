@@ -1,7 +1,6 @@
 package com.aigreentick.services.template.service.impl.template;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -341,8 +340,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                             .status("pending")
                             .messageStatus("pending")
                             .platform(Platform.web)
-                            .createdAt(Instant.now())
-                            .updatedAt(Instant.now())
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
                             .build())
                     .toList();
 

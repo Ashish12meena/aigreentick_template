@@ -1,7 +1,6 @@
 package com.aigreentick.services.template.service.impl.template;
 
 import java.math.BigDecimal;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
@@ -189,8 +188,8 @@ public class SendTemplateOrchestratorServiceImpl {
                             .status("pending")
                             .messageStatus("pending")
                             .platform(Platform.web)
-                            .createdAt(Instant.now())
-                            .updatedAt(Instant.now())
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
                             .build())
                     .toList();
 

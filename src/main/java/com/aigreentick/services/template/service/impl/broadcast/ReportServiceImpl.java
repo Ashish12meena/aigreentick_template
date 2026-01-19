@@ -133,7 +133,7 @@ public class ReportServiceImpl {
         Report report = getReportByMessageId(messageId);
         report.setStatus(newStatus);
         report.setMessageStatus(newStatus);
-        report.setUpdatedAt(Instant.now());
+        report.setUpdatedAt(LocalDateTime.now());
         
         return reportRepository.save(report);
     }
