@@ -25,42 +25,42 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 public class TemplateOrchestratorController {
 
-    private final TemplateOrchestratorServiceImpl templateOrchestratorServiceImpl;
+        private final TemplateOrchestratorServiceImpl templateOrchestratorServiceImpl;
 
-    @PostMapping("/create")
-    public ResponseEntity<?> createTemplate(
-            @RequestHeader("X-User-Id") Long userId,
-            @RequestBody TemplateRequest request) {
+        @PostMapping("/create")
+        public ResponseEntity<?> createTemplate(
+                        @RequestHeader("X-User-Id") Long userId,
+                        @RequestBody TemplateRequest request) {
 
-        log.info("Creating template for userId={}", userId);
+                log.info("Creating template for userId={}", userId);
 
-        TemplateResponseDto response =
-                templateOrchestratorServiceImpl.createTemplate(request, userId);
+                TemplateResponseDto response = templateOrchestratorServiceImpl.createTemplate(request, userId);
 
-        return ResponseEntity.ok(
-                new ResponseMessage<>(
-                        ResponseStatus.SUCCESS.name(),
-                        TemplateConstants.Messages.TEMPLATE_CREATED,
-                        response
-                )
-        );
-    }
+                return ResponseEntity.ok(
+                                new ResponseMessage<>(
+                                                ResponseStatus.SUCCESS.name(),
+                                                TemplateConstants.Messages.TEMPLATE_CREATED,
+                                                response));
+        }
 
-    @GetMapping("/sync-my-templates")
-    public ResponseEntity<?> syncTemplateWithFacebook(
-            @RequestHeader("X-User-Id") Long userId) {
+        @GetMapping("/sync-my-templates")
+        public ResponseEntity<?> syncTemplateWithFacebook(
+                        @RequestHeader("X-User-Id") Long userId) {
 
-        log.info("Syncing templates for userId={}", userId);
+                log.info("Syncing templates for userId={}", userId);
 
-        TemplateSyncStats response =
-                templateOrchestratorServiceImpl.syncTemplatesWithFacebook(userId);
+                TemplateSyncStats response = templateOrchestratorServiceImpl.syncTemplatesWithFacebook(userId);
 
-        return ResponseEntity.ok(
-                new ResponseMessage<>(
-                        ResponseStatus.SUCCESS.name(),
-                        TemplateConstants.Messages.TEMPLATES_FETCHED,
-                        response
-                )
-        );
-    }
+                return ResponseEntity.ok(
+                                new ResponseMessage<>(
+                                                ResponseStatus.SUCCESS.name(),
+                                                TemplateConstants.Messages.TEMPLATES_FETCHED,
+                                                response));
+        }
+
+        @GetMapping("/sample")
+        public String getSample() {
+                return "sample fetched";
+        }
+
 }

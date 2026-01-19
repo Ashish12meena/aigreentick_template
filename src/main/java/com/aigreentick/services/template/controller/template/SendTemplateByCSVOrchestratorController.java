@@ -1,6 +1,7 @@
 package com.aigreentick.services.template.controller.template;
 
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -32,15 +33,17 @@ public class SendTemplateByCSVOrchestratorController {
 
         log.info("Broadcasting template via CSV for userId={}", userId);
 
-        TemplateResponseDto response =
-                sendTemplateByCSVOrchestratorServiceImpl.broadcastTemplate(request, userId);
+        TemplateResponseDto response = sendTemplateByCSVOrchestratorServiceImpl.broadcastTemplate(request, userId);
 
         return ResponseEntity.ok(
                 new ResponseMessage<>(
                         ResponseStatus.SUCCESS.name(),
                         TemplateConstants.Messages.TEMPLATE_CREATED,
-                        response
-                )
-        );
+                        response));
+    }
+
+    @GetMapping("/sample")
+    public String getSample() {
+        return "sample fetched";
     }
 }
