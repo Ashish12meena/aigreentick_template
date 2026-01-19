@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 import com.fasterxml.jackson.annotation.JsonBackReference;
 
@@ -17,6 +18,7 @@ import com.fasterxml.jackson.annotation.JsonBackReference;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TemplateCarouselCardButton {
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -41,7 +43,7 @@ public class TemplateCarouselCardButton {
 
     @Column(name = "phone_number")
     private String phoneNumber;
-    
+
     @Column(name = "parameters")
     private String parameters;
 
@@ -53,4 +55,21 @@ public class TemplateCarouselCardButton {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
+    }
 }

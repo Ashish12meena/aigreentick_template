@@ -6,11 +6,13 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Data
 @Entity
 @Table(name = "send_by_tags")
 public class SendByTags {
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -60,4 +62,21 @@ public class SendByTags {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+        @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
+    }
 }

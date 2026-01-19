@@ -4,6 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Table(name = "users")
@@ -13,6 +14,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class User {
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -81,7 +83,7 @@ public class User {
 
     /* ================= STATUS FLAGS ================= */
 
-    @Column(name = "online_status", nullable = false,columnDefinition = "enum('0','1')")
+    @Column(name = "online_status", nullable = false, columnDefinition = "enum('0','1')")
     @Builder.Default
     private String onlineStatus = "0";
 
@@ -143,6 +145,23 @@ public class User {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
+    }
 
     /* ================= ENUMS (PIN-TO-PIN) ================= */
 

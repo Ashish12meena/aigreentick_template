@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TemplateComponent {
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -95,6 +97,23 @@ public class TemplateComponent {
     public void removeCarouselCard(TemplateCarouselCard card) {
         carouselCards.remove(card);
         card.setComponent(null);
+    }
+
+     @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
     }
 
 }

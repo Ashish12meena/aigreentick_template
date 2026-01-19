@@ -7,6 +7,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 @NoArgsConstructor
 @AllArgsConstructor
 public class TemplateCarouselCard {
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -28,7 +30,7 @@ public class TemplateCarouselCard {
     @Column(name = "template_id")
     private Long templateId;
 
-     @ManyToOne(fetch = FetchType.LAZY)
+    @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "component_id", nullable = false)
     @JsonBackReference
     private TemplateComponent component;
@@ -48,11 +50,11 @@ public class TemplateCarouselCard {
 
     private String parameters;
 
-       // ==================== RELATIONSHIPS ====================
+    // ==================== RELATIONSHIPS ====================
 
     @OneToMany(mappedBy = "card", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    @JsonManagedReference 
+    @JsonManagedReference
     private List<TemplateCarouselCardButton> buttons = new ArrayList<>();
 
     @Column(name = "created_at")
@@ -74,6 +76,23 @@ public class TemplateCarouselCard {
     public void removeButton(TemplateCarouselCardButton button) {
         buttons.remove(button);
         button.setCard(null);
+    }
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
     }
 
 }

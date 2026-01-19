@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.ToString;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -20,7 +21,8 @@ import com.fasterxml.jackson.annotation.JsonManagedReference;
 @AllArgsConstructor
 @Builder
 public class Template {
-
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
+    
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -72,6 +74,7 @@ public class Template {
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
 
+
     @Column(name = "template_type")
     private String templateType;
 
@@ -95,6 +98,23 @@ public class Template {
     public void removeText(TemplateText text) {
         texts.remove(text);
         text.setTemplate(null);
+    }
+
+        @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
     }
 
 }
