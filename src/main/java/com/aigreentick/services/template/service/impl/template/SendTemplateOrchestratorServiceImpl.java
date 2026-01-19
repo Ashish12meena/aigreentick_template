@@ -1,7 +1,3 @@
-// ============================================================================
-// UPDATED SendTemplateOrchestratorServiceImpl.java
-// ============================================================================
-
 package com.aigreentick.services.template.service.impl.template;
 
 import java.math.BigDecimal;
@@ -47,6 +43,13 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Orchestrates the WhatsApp template broadcast workflow.
+ * 
+ * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast 
+ *       -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages 
+ *       -> Build Templates -> Dispatch Async
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
@@ -61,7 +64,7 @@ public class SendTemplateOrchestratorServiceImpl {
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
     private final ChatContactServiceImpl chatContactService;
-    private final ContactMessagesServiceImpl contactMessagesService; // NEW
+    private final ContactMessagesServiceImpl contactMessagesService;
     private final TemplateBuilderServiceImpl templateBuilder;
     private final AsyncBatchDispatcherService asyncDispatchService;
     private final ObjectMapper objectMapper;
@@ -72,17 +75,27 @@ public class SendTemplateOrchestratorServiceImpl {
     @Value("${broadcast.build-batch-size:500}")
     private int buildBatchSize;
 
+    /**
+     * Main entry point for broadcasting WhatsApp templates.
+     * This method is transactional to ensure atomicity of DB operations
+     * (broadcast creation, wallet deduction, reports, contacts).
+     * 
+     * Note: Async dispatch happens AFTER transaction commits.
+     */
     @Transactional
     public TemplateResponseDto broadcastTemplate(SendTemplateRequestDto request, Long userId) {
         log.info("=== Starting optimized broadcast for userId: {} ===", userId);
 
-        // ========== STEP 1-7: Same as before ==========
+        // Step 1-3: Load required entities
         User user = userService.getActiveUserById(userId);
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
         Template template = templateService.getTemplateById(request.getTemlateId());
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
+        
+        // Step 4: Get price based on template category (AUTH/UTILITY/MARKETING)
         BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
 
+        // Step 5: Remove blacklisted numbers
         List<String> validNumbers = blacklistService.filterBlockedNumbers(userId, request.getMobileNumbers());
         log.info("Filtered numbers: {} valid out of {} total", validNumbers.size(), request.getMobileNumbers().size());
 
@@ -90,6 +103,7 @@ public class SendTemplateOrchestratorServiceImpl {
             throw new IllegalArgumentException("No valid numbers after blacklist filtering");
         }
 
+        // Step 6: Validate user has sufficient balance
         BigDecimal totalDeduction = pricePerMessage.multiply(new BigDecimal(validNumbers.size()));
         if (BigDecimal.valueOf(user.getBalance()).compareTo(totalDeduction) < 0) {
             throw new InsufficientBalanceException(
@@ -98,22 +112,23 @@ public class SendTemplateOrchestratorServiceImpl {
                     402);
         }
 
+        // Step 7: Create broadcast record and deduct wallet (within same transaction)
         Broadcast broadcast = createBroadcastRecord(request, user, config, validNumbers, template);
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // ========== STEP 8: Create Reports & Capture IDs ==========
+        // Step 8: Create report entries for each recipient (for tracking delivery status)
         log.info("Creating reports at: {}", LocalDateTime.now());
         Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-        // ========== STEP 9: Create Chat Contacts & Capture IDs ==========
+        // Step 9: Ensure chat contacts exist (creates if not present, returns IDs)
         log.info("Creating chat contacts at: {}", LocalDateTime.now());
         Map<String, Long> mobileToContactId = createChatContactsAndGetIds(
                 user.getId(), validNumbers, request.getCountryId());
 
-        // ========== STEP 10: Create ContactMessages (Async Background) ==========
+        // Step 10: Link contacts to messages via junction table (async, non-blocking)
         contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId);
 
-        // ========== STEP 11: Build Templates ==========
+        // Step 11: Build WhatsApp API payloads for all recipients
         log.info("=== PHASE 1: Building templates for {} numbers ===", validNumbers.size());
         long buildStart = System.currentTimeMillis();
 
@@ -123,7 +138,7 @@ public class SendTemplateOrchestratorServiceImpl {
         long buildDuration = System.currentTimeMillis() - buildStart;
         log.info("=== Built {} dispatch items in {}ms ===", allDispatchItems.size(), buildDuration);
 
-        // ========== STEP 12: Dispatch Async ==========
+        // Step 12: Dispatch messages asynchronously (returns immediately)
         WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
                 .phoneNumberId(config.getWhatsappNoId())
                 .accessToken(config.getParmenentToken())
@@ -134,6 +149,7 @@ public class SendTemplateOrchestratorServiceImpl {
         CompletableFuture<Void> dispatchFuture = asyncDispatchService.dispatchAsync(
                 allDispatchItems, accountInfo, broadcast.getId());
 
+        // Log completion (non-blocking callback)
         dispatchFuture.whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("Async dispatch failed for broadcastId: {}", broadcast.getId(), throwable);
@@ -151,8 +167,10 @@ public class SendTemplateOrchestratorServiceImpl {
                 .build();
     }
 
-    // ==================== NEW: Create Reports & Return ID Map ====================
-
+    /**
+     * Creates report entries in batches and returns mobile -> reportId mapping.
+     * Reports track individual message delivery status.
+     */
     private Map<String, Long> createReportsAndGetIds(Long userId, Long broadcastId, List<String> validNumbers) {
         Map<String, Long> mobileToReportId = new HashMap<>();
 
@@ -174,10 +192,8 @@ public class SendTemplateOrchestratorServiceImpl {
                             .build())
                     .toList();
 
-            // Save and get back with IDs
             List<Report> savedReports = reportService.saveAll(reports);
 
-            // Collect mobile -> reportId mapping
             for (Report saved : savedReports) {
                 mobileToReportId.put(saved.getMobile(), saved.getId());
             }
@@ -187,9 +203,10 @@ public class SendTemplateOrchestratorServiceImpl {
         return mobileToReportId;
     }
 
-    // ==================== NEW: Create Contacts & Return ID Map
-    // ====================
-
+    /**
+     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId mapping.
+     * Creates new contacts if they don't exist.
+     */
     private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> mobileNumbers, Long countryId) {
         Map<String, Long> mobileToContactId = new HashMap<>();
 
@@ -197,7 +214,6 @@ public class SendTemplateOrchestratorServiceImpl {
             int end = Math.min(i + mobileNumbers.size(), mobileNumbers.size());
             List<String> batch = mobileNumbers.subList(i, end);
 
-            // This returns Map<String, Long> of mobile -> contactId
             Map<String, Long> batchResult = chatContactService.ensureContactsExistAndGetIds(
                     userId, batch, countryId);
 
@@ -208,8 +224,10 @@ public class SendTemplateOrchestratorServiceImpl {
         return mobileToContactId;
     }
 
-    // ==================== HELPER METHODS (Same as before) ====================
-
+    /**
+     * Returns message price based on template category.
+     * Prices are configured per-user in User entity.
+     */
     private BigDecimal getPricePerMessage(Long userId, String templateCategory, User user) {
         Double charge = switch (TemplateCategory.valueOf(templateCategory)) {
             case AUTHENTICATION -> user.getAuthMsgCharge();
@@ -224,6 +242,10 @@ public class SendTemplateOrchestratorServiceImpl {
         return BigDecimal.valueOf(charge);
     }
 
+    /**
+     * Creates the broadcast record with all metadata.
+     * Stores mobile numbers as comma-separated string for reference.
+     */
     private Broadcast createBroadcastRecord(SendTemplateRequestDto request, User user,
             WhatsappAccount config, List<String> validNumbers, Template template) {
 
@@ -250,6 +272,9 @@ public class SendTemplateOrchestratorServiceImpl {
                 .build());
     }
 
+    /**
+     * Deducts amount from user balance and creates wallet transaction record.
+     */
     private void deductWalletBalance(User user, BigDecimal totalDeduction, Long broadcastId) {
         userService.deductBalance(user.getId(), totalDeduction.doubleValue());
 
@@ -267,6 +292,10 @@ public class SendTemplateOrchestratorServiceImpl {
                 .build());
     }
 
+    /**
+     * Builds WhatsApp API payloads in batches to avoid memory pressure.
+     * Each payload is serialized to JSON for Kafka dispatch.
+     */
     private List<BroadcastDispatchItemDto> buildAllDispatchItemsInBatches(
             Long userId, List<String> phoneNumbers, TemplateDto templateDto,
             SendTemplateRequestDto request, Long broadcastId) {

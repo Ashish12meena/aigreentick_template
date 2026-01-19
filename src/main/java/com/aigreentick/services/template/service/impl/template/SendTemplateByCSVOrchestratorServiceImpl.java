@@ -44,10 +44,20 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Orchestrates WhatsApp template broadcast from CSV uploads.
+ * Similar to SendTemplateOrchestratorServiceImpl but handles CSV-specific data
+ * where each row can have unique variable values per recipient.
+ * 
+ * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast 
+ *       -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages 
+ *       -> Build Templates (with CSV variables) -> Dispatch Async
+ */
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class SendTemplateByCSVOrchestratorServiceImpl {
+
     private final WhatsappAccountServiceImpl whatsappAccountService;
     private final TemplateServiceImpl templateService;
     private final TemplateMapper templateMapper;
@@ -57,7 +67,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
     private final ChatContactServiceImpl chatContactService;
-    private final TemplateBuilderForCsvServiceImpl csvTemplateBuilder;
+    private final TemplateBuilderForCsvServiceImpl csvTemplateBuilder; // CSV-specific builder
     private final AsyncBatchDispatcherService asyncDispatchService;
     private final ObjectMapper objectMapper;
     private final ContactMessagesServiceImpl contactMessagesService;
@@ -68,23 +78,29 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     @Value("${broadcast.build-batch-size:500}")
     private int buildBatchSize;
 
+    /**
+     * Main entry point for CSV-based WhatsApp template broadcasts.
+     * Transactional to ensure atomicity of DB operations.
+     * 
+     * Key difference from regular broadcast: CSV contains per-recipient variables,
+     * so template building uses csvTemplateBuilder instead of regular templateBuilder.
+     */
     @Transactional
     public TemplateResponseDto broadcastTemplate(SendTemplateByCsvRequestDto request, Long userId) {
         log.info("=== Starting optimized CSV broadcast for userId: {} ===", userId);
 
-        // ========== STEP 1: Get User & WhatsApp Configuration ==========
+        // Step 1-2: Load user and WhatsApp configuration
         User user = userService.getActiveUserById(userId);
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
 
-        // ========== STEP 2: Get and Map Template ==========
+        // Step 3: Load and map template
         Template template = templateService.getTemplateById(Long.valueOf(request.getTemplateId()));
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
 
-        // ========== STEP 3: Calculate Pricing ==========
+        // Step 4: Get price based on template category
         BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
 
-        // ========== STEP 4: Convert mobile numbers to strings & filter blacklist
-        // ==========
+        // Step 5: Convert mobile numbers and filter blacklisted ones
         List<String> mobileStrings = request.getMobileNumbers().stream()
                 .map(String::valueOf)
                 .toList();
@@ -96,7 +112,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
             throw new IllegalArgumentException("No valid numbers after blacklist filtering");
         }
 
-        // ========== STEP 5: Validate Wallet Balance ==========
+        // Step 6: Validate user has sufficient balance
         BigDecimal totalDeduction = pricePerMessage.multiply(new BigDecimal(validNumbers.size()));
         if (BigDecimal.valueOf(user.getBalance()).compareTo(totalDeduction) < 0) {
             throw new InsufficientBalanceException(
@@ -105,25 +121,25 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                     402);
         }
 
-        // ========== STEP 6: Create Broadcast Record ==========
+        // Step 7: Create broadcast record (marks source as "CSV")
         Broadcast broadcast = createBroadcastRecord(request, user, validNumbers, template);
 
-        // ========== STEP 7: Deduct Wallet Balance ==========
+        // Step 8: Deduct wallet balance and create transaction record
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // ========== STEP 8: Create Reports & Capture IDs ==========
+        // Step 9: Create report entries for tracking delivery status
         log.info("Creating reports at: {}", LocalDateTime.now());
         Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-        // ========== STEP 9: Create Chat Contacts & Capture IDs ==========
+        // Step 10: Ensure chat contacts exist and get their IDs
         log.info("Creating chat contacts at: {}", LocalDateTime.now());
         Long countryId = request.getCountryId() != null ? request.getCountryId().longValue() : null;
         Map<String, Long> mobileToContactId = createChatContactsAndGetIds(user.getId(), validNumbers, countryId);
 
-        // ========== STEP 10: Create ContactMessages (Async Background) ==========
+        // Step 11: Link contacts to messages via junction table (async, non-blocking)
         contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId);
 
-        // ========== STEP 10: BUILD ALL TEMPLATES (Synchronous, Optimized) ==========
+        // Step 12: Build WhatsApp API payloads with CSV-specific variables
         log.info("=== PHASE 1: Building CSV templates for {} numbers ===", validNumbers.size());
         long buildStart = System.currentTimeMillis();
 
@@ -133,7 +149,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         long buildDuration = System.currentTimeMillis() - buildStart;
         log.info("=== Built {} CSV dispatch items in {}ms ===", allDispatchItems.size(), buildDuration);
 
-        // ========== STEP 11: DISPATCH ASYNC (Fire-and-forget) ==========
+        // Step 13: Dispatch messages asynchronously (returns immediately)
         WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
                 .phoneNumberId(config.getWhatsappNoId())
                 .accessToken(config.getParmenentToken())
@@ -144,7 +160,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         CompletableFuture<Void> dispatchFuture = asyncDispatchService.dispatchAsync(
                 allDispatchItems, accountInfo, broadcast.getId());
 
-        // Optional: Add completion handler
+        // Log completion (non-blocking callback)
         dispatchFuture.whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("Async CSV dispatch failed for broadcastId: {}", broadcast.getId(), throwable);
@@ -162,12 +178,12 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                 .build();
     }
 
-    // ==================== PHASE 1: BUILD ALL CSV TEMPLATES ====================
-
     /**
-     * Build all CSV dispatch items in batches to manage memory.
-     * Builds MessageRequest -> Serializes to JSON -> Discards MessageRequest.
-     * Only keeps lightweight DispatchItem (mobile + JSON string).
+     * Builds WhatsApp API payloads in batches using CSV-specific template builder.
+     * Each recipient gets personalized content based on their CSV row data.
+     * 
+     * Memory optimization: Serializes to JSON immediately, allowing MessageRequest 
+     * objects to be garbage collected after each batch.
      */
     private List<BroadcastDispatchItemDto> buildAllCsvDispatchItemsInBatches(
             Long userId,
@@ -188,11 +204,11 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
 
             log.debug("Building CSV batch {}/{} ({} numbers)", batchNum, totalBatches, batch.size());
 
-            // Build CSV templates for this batch
+            // Build templates with per-recipient CSV variables
             List<MessageRequest> messageRequests = csvTemplateBuilder.buildSendableTemplatesFromCsv(
                     userId, batch, templateDto, request);
 
-            // Immediately serialize and convert to lightweight dispatch items
+            // Serialize immediately to minimize memory footprint
             for (MessageRequest msg : messageRequests) {
                 try {
                     String payload = objectMapper
@@ -207,11 +223,9 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
 
                 } catch (Exception e) {
                     log.error("Failed to serialize CSV message for {}: {}", msg.getTo(), e.getMessage());
-                    // Continue with other messages
                 }
             }
 
-            // MessageRequest objects are now garbage collected
             log.debug("CSV batch {}/{} completed - {} items serialized", batchNum, totalBatches, batch.size());
         }
 
@@ -221,6 +235,10 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
 
     // ==================== HELPER METHODS ====================
 
+    /**
+     * Returns message price based on template category.
+     * Prices are configured per-user in User entity.
+     */
     private BigDecimal getPricePerMessage(Long userId, String category, User user) {
         Double charge = switch (TemplateCategory.valueOf(category)) {
             case AUTHENTICATION -> user.getAuthMsgCharge();
@@ -234,6 +252,10 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         return BigDecimal.valueOf(charge);
     }
 
+    /**
+     * Creates broadcast record with CSV-specific metadata.
+     * Marks source as "CSV" to distinguish from regular broadcasts.
+     */
     private Broadcast createBroadcastRecord(SendTemplateByCsvRequestDto request, User user,
             List<String> validNumbers, Template template) {
 
@@ -245,6 +267,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         data.put("is_media", request.getIsMedia());
         data.put("source", "CSV");
 
+        // Parse optional schedule date
         LocalDateTime scheduleAt = null;
         if (request.getScheduleDate() != null && !request.getScheduleDate().isBlank()) {
             try {
@@ -273,6 +296,9 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         return broadcastService.save(broadcast);
     }
 
+    /**
+     * Deducts amount from user balance and creates wallet transaction record.
+     */
     private void deductWalletBalance(User user, BigDecimal totalDeduction, Long broadcastId) {
         log.info("Deducting {} from userId: {} for CSV broadcastId: {}", totalDeduction, user.getId(), broadcastId);
 
@@ -294,6 +320,10 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         walletService.save(wallet);
     }
 
+    /**
+     * Creates report entries in batches and returns mobile -> reportId mapping.
+     * Reports track individual message delivery status.
+     */
     private Map<String, Long> createReportsAndGetIds(Long userId, Long broadcastId, List<String> numbers) {
         Map<String, Long> mobileToReportId = new HashMap<>();
 
@@ -326,6 +356,10 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         return mobileToReportId;
     }
 
+    /**
+     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId mapping.
+     * Creates new contacts if they don't exist.
+     */
     private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> numbers, Long countryId) {
         Map<String, Long> mobileToContactId = new HashMap<>();
 
@@ -340,5 +374,4 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         log.info("Ensured {} contacts with IDs", mobileToContactId.size());
         return mobileToContactId;
     }
-
 }
