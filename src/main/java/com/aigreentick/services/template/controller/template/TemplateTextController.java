@@ -7,6 +7,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -20,28 +21,33 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+
 @RestController
 @RequestMapping("/api/v1/template")
 @RequiredArgsConstructor
 @Slf4j
 public class TemplateTextController {
-     private final TemplateTextServiceImpl templateTextService;
+
+    private final TemplateTextServiceImpl templateTextService;
 
     /**
      * Get all variables for a template
      */
     @GetMapping("/{templateId}/text")
-    public ResponseEntity<?> getTemplateText(@PathVariable Long templateId) {
-        log.info("Fetching variables for templateId: {}", templateId);
+    public ResponseEntity<?> getTemplateText(
+            @RequestHeader("X-User-Id") Long userId,
+            @PathVariable Long templateId) {
 
-        Long userId = 1L; // Replace with actual user from security context
+        log.info("Fetching variables for templateId={} userId={}", templateId, userId);
 
-        List<TemplateTextResponseDto> variables = templateTextService.getTemplateVariables(templateId, userId);
+        List<TemplateTextResponseDto> variables =
+                templateTextService.getTemplateVariables(templateId, userId);
 
         return ResponseEntity.ok(new ResponseMessage<>(
                 ResponseStatus.SUCCESS.name(),
                 "Template variables fetched successfully",
-                variables));
+                variables
+        ));
     }
 
     /**
@@ -49,20 +55,24 @@ public class TemplateTextController {
      */
     @PutMapping("/{templateId}/variables/defaults")
     public ResponseEntity<?> updateVariableDefaults(
+            @RequestHeader("X-User-Id") Long userId,
             @PathVariable Long templateId,
             @Valid @RequestBody TemplateTextUpdateDefaultRequest request) {
 
-        log.info("Updating default values for templateId: {}", templateId);
+        log.info("Updating default values for templateId={} userId={}", templateId, userId);
 
-        Long userId = 1L; // Replace with actual user from security context
-
-        List<TemplateTextResponseDto> updatedVariables = templateTextService
-                .updateVariableDefaults(templateId, userId, request.getDefaults());
+        List<TemplateTextResponseDto> updatedVariables =
+                templateTextService.updateVariableDefaults(
+                        templateId,
+                        userId,
+                        request.getDefaults()
+                );
 
         return ResponseEntity.ok(new ResponseMessage<>(
                 ResponseStatus.SUCCESS.name(),
                 "Default values updated successfully",
-                updatedVariables));
+                updatedVariables
+        ));
     }
 
     /**
@@ -70,41 +80,48 @@ public class TemplateTextController {
      */
     @PutMapping("/{templateId}/variables/{variableId}/default")
     public ResponseEntity<?> updateSingleVariableDefault(
+            @RequestHeader("X-User-Id") Long userId,
             @PathVariable Long templateId,
             @PathVariable Long variableId,
             @RequestBody SingleVariableDefaultRequest request) {
 
-        log.info("Updating default value for variableId: {} in templateId: {}", variableId, templateId);
+        log.info("Updating default value for variableId={} templateId={} userId={}",
+                variableId, templateId, userId);
 
-        Long userId = 1L; // Replace with actual user from security context
-
-        TemplateTextResponseDto updatedVariable = templateTextService
-                .updateSingleVariableDefault(templateId, variableId, userId, request.getDefaultValue());
+        TemplateTextResponseDto updatedVariable =
+                templateTextService.updateSingleVariableDefault(
+                        templateId,
+                        variableId,
+                        userId,
+                        request.getDefaultValue()
+                );
 
         return ResponseEntity.ok(new ResponseMessage<>(
                 ResponseStatus.SUCCESS.name(),
                 "Default value updated successfully",
-                updatedVariable));
+                updatedVariable
+        ));
     }
 
     /**
      * Clear all default values for a template
      */
     @PutMapping("/{templateId}/variables/defaults/clear")
-    public ResponseEntity<?> clearAllDefaults(@PathVariable Long templateId) {
-        log.info("Clearing all default values for templateId: {}", templateId);
+    public ResponseEntity<?> clearAllDefaults(
+            @RequestHeader("X-User-Id") Long userId,
+            @PathVariable Long templateId) {
 
-        Long userId = 1L; // Replace with actual user from security context
+        log.info("Clearing all default values for templateId={} userId={}", templateId, userId);
 
         templateTextService.clearAllDefaults(templateId, userId);
 
         return ResponseEntity.ok(new ResponseMessage<>(
                 ResponseStatus.SUCCESS.name(),
                 "All default values cleared successfully",
-                null));
+                null
+        ));
     }
 
-    // Inner class for single variable update
     @lombok.Data
     public static class SingleVariableDefaultRequest {
         private String defaultValue;

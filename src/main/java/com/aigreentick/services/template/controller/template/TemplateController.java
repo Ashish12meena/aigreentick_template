@@ -5,6 +5,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -26,63 +27,69 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class TemplateController {
-    private final TemplateServiceImpl templateService;
+        private final TemplateServiceImpl templateService;
 
-    @GetMapping(TemplateConstants.Paths.TEMPLATE_BY_ID)
-    public ResponseEntity<?> getTemplate(@PathVariable Long id) {
-        Template response = templateService.getTemplateById(id);
+        @GetMapping(TemplateConstants.Paths.TEMPLATE_BY_ID)
+        public ResponseEntity<?> getTemplate(@PathVariable Long id) {
+                Template response = templateService.getTemplateById(id);
 
-        return ResponseEntity.ok(
-                new ResponseMessage<>(
-                        ResponseStatus.SUCCESS.name(),
-                        TemplateConstants.Messages.TEMPLATES_FETCHED,
-                        response));
+                return ResponseEntity.ok(
+                                new ResponseMessage<>(
+                                                ResponseStatus.SUCCESS.name(),
+                                                TemplateConstants.Messages.TEMPLATES_FETCHED,
+                                                response));
 
-    }
+        }
 
-    @DeleteMapping("/{id}")
-    public ResponseEntity<?> deleteTemplate(@PathVariable Long id) {
-        templateService.deleteTemplateById(id);
+        @DeleteMapping("/{id}")
+        public ResponseEntity<?> deleteTemplate(@PathVariable Long id) {
+                templateService.deleteTemplateById(id);
 
-        return ResponseEntity.ok(
-                new ResponseMessage<>(
-                        ResponseStatus.SUCCESS.name(),
-                        "Template deleted",
-                        null));
+                return ResponseEntity.ok(
+                                new ResponseMessage<>(
+                                                ResponseStatus.SUCCESS.name(),
+                                                "Template deleted",
+                                                null));
 
-    }
+        }
 
-    @DeleteMapping("/delete/all")
-    public ResponseEntity<?> deleteAllTemplate() {
+        @DeleteMapping("/delete/all")
+        public ResponseEntity<?> deleteAllTemplate(
+                        @RequestHeader("X-User-Id") Long userId) {
 
-        Long userId = 1L;
-        templateService.deleteAllTemplatesByUserId(userId);
+                templateService.deleteAllTemplatesByUserId(userId);
 
-        return ResponseEntity.ok(
-                new ResponseMessage<>(
-                        ResponseStatus.SUCCESS.name(),
-                        "Template deleted",
-                        null));
+                return ResponseEntity.ok(
+                                new ResponseMessage<>(
+                                                ResponseStatus.SUCCESS.name(),
+                                                "Templates deleted",
+                                                null));
+        }
 
-    }
+        /**
+         * Get all templates for the user with optional search and pagination.
+         */
+        @GetMapping(TemplateConstants.Paths.MY_TEMPLATES)
+        public ResponseEntity<?> getUserTemplates(
+                        @RequestHeader("X-User-Id") Long userId,
+                        @RequestParam(name = "search", required = false) String search,
+                        @RequestParam(name = "status", required = false) String status,
+                        @Valid TempalatePaginationRequestDto pagination) {
 
-    /**
-     * Get all templates for the project with optional search and pagination.
-     */
-    @GetMapping(TemplateConstants.Paths.MY_TEMPLATES)
-    public ResponseEntity<?> getUserTemplates(
-            @RequestParam(name = "search", required = false) String search,
-            @RequestParam(name = "status", required = false) String status,
-            @Valid TempalatePaginationRequestDto pagination) {
+                log.info("Fetching templates for userId={}", userId);
 
-        Long userId = 1L;
-        log.info("Fetching templates for projectId: {}", userId);
+                Page<TemplateResponseDto> templates = templateService.getTemplatesForUser(
+                                userId,
+                                status,
+                                search,
+                                pagination.getPage(),
+                                pagination.getSize());
 
-        Page<TemplateResponseDto> templates = templateService.getTemplatesForUser(
-                userId, status, search, pagination.getPage(), pagination.getSize());
+                return ResponseEntity.ok(
+                                new ResponseMessage<>(
+                                                ResponseStatus.SUCCESS.name(),
+                                                TemplateConstants.Messages.TEMPLATES_FETCHED,
+                                                templates));
+        }
 
-        return ResponseEntity.ok(
-                new ResponseMessage<>(ResponseStatus.SUCCESS.name(),
-                        TemplateConstants.Messages.TEMPLATES_FETCHED, templates));
-    }
 }

@@ -3,6 +3,7 @@ package com.aigreentick.services.template.controller.template;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,20 +22,26 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class SendTemplateOrchestratorController {
+
     private final SendTemplateOrchestratorServiceImpl sendTemplateOrchestratorServiceImpl;
 
     @PostMapping("/broadcast")
-    public ResponseEntity<?> createTemplate(
+    public ResponseEntity<?> broadcast(
+            @RequestHeader("X-User-Id") Long userId,
             @RequestBody SendTemplateRequestDto request) {
 
-        log.info("broadcasting template ");
+        log.info("Broadcasting template for userId={}", userId);
 
-        Long userId = 1L;
+        TemplateResponseDto response =
+                sendTemplateOrchestratorServiceImpl.broadcastTemplate(request, userId);
 
-        TemplateResponseDto response = sendTemplateOrchestratorServiceImpl.broadcastTemplate(request, userId);
-
-        return ResponseEntity
-                .ok(new ResponseMessage<>(ResponseStatus.SUCCESS.name(), TemplateConstants.Messages.TEMPLATE_CREATED,
-                        response));
+        return ResponseEntity.ok(
+                new ResponseMessage<>(
+                        ResponseStatus.SUCCESS.name(),
+                        TemplateConstants.Messages.TEMPLATE_CREATED,
+                        response
+                )
+        );
     }
 }
+

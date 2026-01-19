@@ -4,6 +4,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -23,35 +24,43 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class TemplateOrchestratorController {
+
     private final TemplateOrchestratorServiceImpl templateOrchestratorServiceImpl;
 
     @PostMapping("/create")
     public ResponseEntity<?> createTemplate(
+            @RequestHeader("X-User-Id") Long userId,
             @RequestBody TemplateRequest request) {
 
-        log.info("Creating template ");
+        log.info("Creating template for userId={}", userId);
 
-        Long userId = 1L;
+        TemplateResponseDto response =
+                templateOrchestratorServiceImpl.createTemplate(request, userId);
 
-        TemplateResponseDto response = templateOrchestratorServiceImpl.createTemplate(request, userId);
-
-        return ResponseEntity
-                .ok(new ResponseMessage<>(ResponseStatus.SUCCESS.name(), TemplateConstants.Messages.TEMPLATE_CREATED,
-                        response));
+        return ResponseEntity.ok(
+                new ResponseMessage<>(
+                        ResponseStatus.SUCCESS.name(),
+                        TemplateConstants.Messages.TEMPLATE_CREATED,
+                        response
+                )
+        );
     }
 
     @GetMapping("/sync-my-templates")
-    public ResponseEntity<?> syncTemplateWithFacebook() {
+    public ResponseEntity<?> syncTemplateWithFacebook(
+            @RequestHeader("X-User-Id") Long userId) {
 
-        Long userId = 1L;
-        log.info("Syncing templates for userId: {}", userId);
+        log.info("Syncing templates for userId={}", userId);
 
-        TemplateSyncStats response = templateOrchestratorServiceImpl.syncTemplatesWithFacebook(userId);
+        TemplateSyncStats response =
+                templateOrchestratorServiceImpl.syncTemplatesWithFacebook(userId);
 
         return ResponseEntity.ok(
-                new ResponseMessage<>(ResponseStatus.SUCCESS.name(),
-                        TemplateConstants.Messages.TEMPLATES_FETCHED, response));
+                new ResponseMessage<>(
+                        ResponseStatus.SUCCESS.name(),
+                        TemplateConstants.Messages.TEMPLATES_FETCHED,
+                        response
+                )
+        );
     }
-
-   
 }

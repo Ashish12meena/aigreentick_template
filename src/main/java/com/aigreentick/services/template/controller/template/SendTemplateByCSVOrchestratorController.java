@@ -3,6 +3,7 @@ package com.aigreentick.services.template.controller.template;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -21,20 +22,25 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class SendTemplateByCSVOrchestratorController {
+
     private final SendTemplateByCSVOrchestratorServiceImpl sendTemplateByCSVOrchestratorServiceImpl;
 
-        @PostMapping("/broadcast")
-    public ResponseEntity<?> createTemplate(
+    @PostMapping("/broadcast")
+    public ResponseEntity<?> broadcast(
+            @RequestHeader("X-User-Id") Long userId,
             @RequestBody SendTemplateByCsvRequestDto request) {
 
-        log.info("broadcasting template ");
+        log.info("Broadcasting template via CSV for userId={}", userId);
 
-        Long userId = 1L;
+        TemplateResponseDto response =
+                sendTemplateByCSVOrchestratorServiceImpl.broadcastTemplate(request, userId);
 
-        TemplateResponseDto response = sendTemplateByCSVOrchestratorServiceImpl.broadcastTemplate(request, userId);
-
-        return ResponseEntity
-                .ok(new ResponseMessage<>(ResponseStatus.SUCCESS.name(), TemplateConstants.Messages.TEMPLATE_CREATED,
-                        response));
+        return ResponseEntity.ok(
+                new ResponseMessage<>(
+                        ResponseStatus.SUCCESS.name(),
+                        TemplateConstants.Messages.TEMPLATE_CREATED,
+                        response
+                )
+        );
     }
 }
