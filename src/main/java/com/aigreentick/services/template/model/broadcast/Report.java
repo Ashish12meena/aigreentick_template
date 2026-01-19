@@ -11,8 +11,9 @@ import org.hibernate.type.SqlTypes;
 
 import com.aigreentick.services.template.enums.Platform;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 
 @Data
 @Entity
@@ -75,28 +76,28 @@ public class Report {
     private Platform platform = Platform.web;
 
     @Column(name = "created_at", nullable = false, updatable = false)
-    private LocalDateTime createdAt;
+    private Instant createdAt;
 
     @Column(name = "updated_at", nullable = false)
-    private LocalDateTime updatedAt;
+    private Instant updatedAt;
 
     @Column(name = "deleted_at")
-    private LocalDateTime deletedAt;
+    private Instant deletedAt;
 
-   @PrePersist
+    @PrePersist
     protected void onCreate() {
-        LocalDateTime now = LocalDateTime.now(IST);
+        Instant now = ZonedDateTime.now(IST).toInstant();
         this.createdAt = now;
         this.updatedAt = now;
     }
 
     @PreUpdate
     protected void onUpdate() {
-        this.updatedAt = LocalDateTime.now(IST);
+        this.updatedAt = ZonedDateTime.now(IST).toInstant();
     }
 
     @PreRemove
     protected void onDelete() {
-        this.deletedAt = LocalDateTime.now(IST);
+        this.deletedAt = ZonedDateTime.now(IST).toInstant();
     }
 }

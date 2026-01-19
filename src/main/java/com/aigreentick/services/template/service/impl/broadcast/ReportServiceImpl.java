@@ -1,5 +1,6 @@
 package com.aigreentick.services.template.service.impl.broadcast;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
@@ -132,7 +133,7 @@ public class ReportServiceImpl {
         Report report = getReportByMessageId(messageId);
         report.setStatus(newStatus);
         report.setMessageStatus(newStatus);
-        report.setUpdatedAt(LocalDateTime.now());
+        report.setUpdatedAt(Instant.now());
         
         return reportRepository.save(report);
     }
