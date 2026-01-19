@@ -90,7 +90,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         log.info("=== Starting optimized CSV broadcast for userId: {} ===", userId);
 
         // Step 1-2: Load user and WhatsApp configuration
-        User user = userService.getActiveUserById(userId);
+        User user = userService.getUserById(userId);
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
 
         // Step 3: Load and map template
