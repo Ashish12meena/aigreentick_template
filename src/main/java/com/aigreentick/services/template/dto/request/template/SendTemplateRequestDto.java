@@ -4,13 +4,18 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import com.fasterxml.jackson.annotation.JsonProperty;
+
 import jakarta.validation.constraints.Future;
 import lombok.Data;
 
 @Data
 public class SendTemplateRequestDto {
     private Long temlateId;
+
+    @JsonProperty("campName")
     private String campanyName;
+    
     private Long countryId;
     private List<String> mobileNumbers;
 
@@ -19,14 +24,14 @@ public class SendTemplateRequestDto {
     private String copyCode;
     private boolean isFullyPrameterized;
     private String defaultValue;
-    private Map<String, String> parameters; 
+    private Map<String, String> parameters;
     private Long expirationTimeMs;
     private Boolean isMedia;
     private long mediaId;
     private String mediaUrl;
     private String mediaType;
     List<String> mediaIdsForCarosel;
-    private String catalogId; 
+    private String catalogId;
     private List<String> productRetailerIds;
 
     @Future(message = "Schedule date must be in the future")

@@ -88,7 +88,7 @@ public class SendTemplateOrchestratorServiceImpl {
         log.info("=== Starting optimized broadcast for userId: {} ===", userId);
 
         // Step 1-3: Load required entities
-        User user = userService.getActiveUserById(userId);
+        User user = userService.getUserById(userId);
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
         Template template = templateService.getTemplateById(request.getTemlateId());
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
