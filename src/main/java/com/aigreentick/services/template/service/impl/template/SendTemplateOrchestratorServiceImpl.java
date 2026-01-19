@@ -2,6 +2,7 @@ package com.aigreentick.services.template.service.impl.template;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -263,7 +264,7 @@ public class SendTemplateOrchestratorServiceImpl {
                 .data(data)
                 .total(validNumbers.size())
                 .scheduleAt(request.getScheduledAt() != null
-                        ? LocalDateTime.ofInstant(request.getScheduledAt(), java.time.ZoneId.systemDefault())
+                        ? LocalDateTime.ofInstant(request.getScheduledAt(), ZoneId.systemDefault())
                         : null)
                 .status("1")
                 .numbers(String.join(",", validNumbers))

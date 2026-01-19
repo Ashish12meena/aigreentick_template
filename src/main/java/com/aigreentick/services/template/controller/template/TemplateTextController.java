@@ -112,10 +112,6 @@ public class TemplateTextController {
                                 null));
         }
 
-        @GetMapping("/sample")
-        public String getSample() {
-                return "sample fetched";
-        }
 
         @lombok.Data
         public static class SingleVariableDefaultRequest {
