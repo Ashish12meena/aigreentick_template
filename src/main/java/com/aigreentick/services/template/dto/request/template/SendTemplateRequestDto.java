@@ -17,8 +17,6 @@ public class SendTemplateRequestDto {
     private String languageCode;
     private String otp;
     private String copyCode;
-    // private String templateType;
-    private boolean isCsv;
     private boolean isFullyPrameterized;
     private String defaultValue;
     private Map<String, String> parameters; 
