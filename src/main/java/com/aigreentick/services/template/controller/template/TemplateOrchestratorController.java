@@ -58,9 +58,4 @@ public class TemplateOrchestratorController {
                                                 response));
         }
 
-        @GetMapping("/sample")
-        public String getSample() {
-                return "sample fetched";
-        }
-
 }
