@@ -36,14 +36,15 @@ public class ContactMessagesServiceImpl {
     @Async("messageDispatchExecutor")
     public void createContactMessagesAsync(
             Map<String, Long> mobileToReportId,
-            Map<String, Long> mobileToContactId) {
+            Map<String, Long> mobileToContactId,
+            Long userId) {
 
         log.info("[ContactMessages] Starting async creation for {} mobiles", mobileToReportId.size());
 
         long startTime = System.currentTimeMillis();
 
         try {
-            createContactMessagesInBatches(mobileToReportId, mobileToContactId);
+            createContactMessagesInBatches(mobileToReportId, mobileToContactId, userId);
 
             long duration = System.currentTimeMillis() - startTime;
             log.info("[ContactMessages] Completed in {}ms, created {} records",
@@ -61,7 +62,8 @@ public class ContactMessagesServiceImpl {
     @Transactional
     public void createContactMessagesInBatches(
             Map<String, Long> mobileToReportId,
-            Map<String, Long> mobileToContactId) {
+            Map<String, Long> mobileToContactId,
+            Long userId) {
 
         List<String> mobiles = new ArrayList<>(mobileToReportId.keySet());
         log.info("[ContactMessages] Processing {} mobiles in batches of {}", mobiles.size(), batchSize);
@@ -77,6 +79,7 @@ public class ContactMessagesServiceImpl {
                 ContactMessages cm = ContactMessages.builder()
                         .contactId(contactId)
                         .reportId(reportId)
+                        .userId(userId)
                         .createdAt(now)
                         .updatedAt(now)
                         .build();
@@ -103,7 +106,7 @@ public class ContactMessagesServiceImpl {
     }
 
     // Other helper methods...
-    
+
     @Transactional
     public ContactMessages save(ContactMessages contactMessages) {
         return contactMessagesRepository.save(contactMessages);

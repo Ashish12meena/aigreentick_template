@@ -2,16 +2,26 @@ package com.aigreentick.services.template.model.contact;
 
 import jakarta.persistence.*;
 import lombok.Data;
-import java.sql.Timestamp;
+
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
 @Data
 @Entity
-@Table(name = "chat_contacts", uniqueConstraints = {
-        @UniqueConstraint(name = "unique_user_mobile", columnNames = { "user_id", "mobile" })
-})
+@Table(
+    name = "chat_contacts",
+    uniqueConstraints = {
+        @UniqueConstraint(
+            name = "unique_user_mobile",
+            columnNames = { "user_id", "mobile" }
+        )
+    }
+)
 public class ChatContacts {
+
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -44,15 +54,32 @@ public class ChatContacts {
     @Column(name = "allowed_broadcast", nullable = false)
     private boolean allowedBroadcast = true;
 
-    @Column(name = "created_at", nullable = false, updatable = false, insertable = false)
-    private Timestamp createdAt;
+    @Column(name = "created_at", nullable = false, updatable = false)
+    private LocalDateTime createdAt;
 
-    @Column(name = "updated_at", nullable = false, updatable = false, insertable = false)
-    private Timestamp updatedAt;
+    @Column(name = "updated_at", nullable = false)
+    private LocalDateTime updatedAt;
 
     @Column(name = "deleted_at")
-    private Timestamp deletedAt;
+    private LocalDateTime deletedAt;
 
     @OneToMany(mappedBy = "contact", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ContactAttributes> attributes = new ArrayList<>();
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
+    }
 }

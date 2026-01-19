@@ -137,7 +137,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         Map<String, Long> mobileToContactId = createChatContactsAndGetIds(user.getId(), validNumbers, countryId);
 
         // Step 11: Link contacts to messages via junction table (async, non-blocking)
-        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId);
+        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId,user.getId());
 
         // Step 12: Build WhatsApp API payloads with CSV-specific variables
         log.info("=== PHASE 1: Building CSV templates for {} numbers ===", validNumbers.size());

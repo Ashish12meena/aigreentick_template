@@ -1,12 +1,12 @@
 package com.aigreentick.services.template.model.common;
 
-
 import jakarta.persistence.*;
 import lombok.*;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 @Entity
 @Table(name = "wallets")
@@ -16,6 +16,7 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Builder
 public class Wallet {
+    private static final ZoneId IST = ZoneId.of("Asia/Kolkata");
 
     /* ================= PRIMARY KEY ================= */
 
@@ -42,13 +43,8 @@ public class Wallet {
     @Column(name = "type", nullable = false, columnDefinition = "enum('credit','debit')")
     private WalletType type;
 
-
     // you can't enumify this
-    @Column(
-            name = "status",
-            nullable = false,
-            columnDefinition = "enum('1','0','2') COMMENT '1 is active | 0 is deactive | 2 is ban'"
-    )
+    @Column(name = "status", nullable = false, columnDefinition = "enum('1','0','2') COMMENT '1 is active | 0 is deactive | 2 is ban'")
     private String status;
 
     /* ================= META ================= */
@@ -79,6 +75,23 @@ public class Wallet {
 
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    @PrePersist
+    protected void onCreate() {
+        LocalDateTime now = LocalDateTime.now(IST);
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    protected void onUpdate() {
+        this.updatedAt = LocalDateTime.now(IST);
+    }
+
+    @PreRemove
+    protected void onDelete() {
+        this.deletedAt = LocalDateTime.now(IST);
+    }
 
     public enum WalletType {
         credit,

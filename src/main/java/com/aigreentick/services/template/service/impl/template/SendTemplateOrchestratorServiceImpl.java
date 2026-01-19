@@ -127,7 +127,7 @@ public class SendTemplateOrchestratorServiceImpl {
                 user.getId(), validNumbers, request.getCountryId());
 
         // Step 10: Link contacts to messages via junction table (async, non-blocking)
-        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId);
+        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId,user.getId());
 
         // Step 11: Build WhatsApp API payloads for all recipients
         log.info("=== PHASE 1: Building templates for {} numbers ===", validNumbers.size());
@@ -268,8 +268,6 @@ public class SendTemplateOrchestratorServiceImpl {
                         : null)
                 .status("1")
                 .numbers(String.join(",", validNumbers))
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
                 .build());
     }
 

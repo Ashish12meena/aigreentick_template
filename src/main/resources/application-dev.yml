@@ -1,7 +1,7 @@
 spring:
   application:
     name: template
-  
+
   jackson:
     property-naming-strategy: SNAKE_CASE
 
@@ -24,39 +24,11 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
         format_sql: true
+        jdbc:
+          time_zone: Asia/Kolkata
 
   servlet:
     multipart:
       max-file-size: 100MB
       max-request-size: 110MB
       enabled: true
-
-# ---------------- WhatsApp Service ----------------
-whatsapp-service:
-  base-url: https://graph.facebook.com
-  api-version: v23.0
-
-# ---------- Messaging broadcast Service ----------
-messaging-service:
-  base-url: http://localhost:8081/api/v1/broadcast/dispatch
-
-# ---------- Broadcast Configuration ----------
-broadcast:
-  batch-size: 200          # For reports & contacts
-  dispatch-chunk-size: 100 # For messaging service dispatch (per async chunk)
-
-# ---------- Async Dispatch Configuration ----------
-async:
-  dispatch:
-    core-pool-size: 10     # Core threads for steady load
-    max-pool-size: 20      # Max threads for burst load
-    queue-capacity: 100    # Queue size for pending tasks
-    thread-name-prefix: dispatch-
-    await-termination-seconds: 60
-
-# ---------- Template Configuration ----------
-template:
-  default-page-size: 10
-
-# duplicate config currently used in @Value injections
-apiVersion: v23.0
