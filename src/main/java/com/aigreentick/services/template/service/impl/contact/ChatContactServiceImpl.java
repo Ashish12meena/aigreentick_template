@@ -22,6 +22,76 @@ import lombok.extern.slf4j.Slf4j;
 public class ChatContactServiceImpl {
     private final ChatContactsRepository chatContactRepo;
 
+    // ============================================================================
+    // ADD this new method to ChatContactServiceImpl.java
+    // ============================================================================
+
+    /**
+     * Ensures contacts exist and returns a map of mobile -> contactId.
+     * Creates missing contacts, returns IDs for all (existing + newly created).
+     *
+     * @param userId        User ID for contact ownership
+     * @param mobileNumbers List of phone numbers
+     * @param countryId     Country ID for new contacts
+     * @return Map of mobile number -> contact ID
+     */
+    @Transactional
+    public Map<String, Long> ensureContactsExistAndGetIds(Long userId, List<String> mobileNumbers, Long countryId) {
+        log.info("Ensuring {} contacts exist and collecting IDs for userId: {}", mobileNumbers.size(), userId);
+
+        Map<String, Long> mobileToContactId = new HashMap<>();
+
+        // 1. Fetch existing contacts
+        List<ChatContacts> existingContacts = chatContactRepo
+                .findByUserIdAndMobileInAndDeletedAtIsNull(userId, mobileNumbers);
+
+        // Collect existing mobile -> contactId
+        for (ChatContacts contact : existingContacts) {
+            mobileToContactId.put(contact.getMobile(), contact.getId().longValue());
+        }
+
+        Set<String> existingMobiles = mobileToContactId.keySet();
+
+        // 2. Find missing mobiles
+        List<String> missingMobiles = mobileNumbers.stream()
+                .filter(mobile -> !existingMobiles.contains(mobile))
+                .toList();
+
+        // 3. Create missing contacts and collect their IDs
+        if (!missingMobiles.isEmpty()) {
+            log.info("Creating {} missing contacts", missingMobiles.size());
+
+            String countryIdStr = countryId != null ? countryId.toString() : "91";
+
+            List<ChatContacts> newContacts = missingMobiles.stream()
+                    .map(mobile -> {
+                        ChatContacts contact = new ChatContacts();
+                        contact.setUserId(userId);
+                        contact.setMobile(mobile);
+                        contact.setName("Contact " + mobile);
+                        contact.setCountryId(countryIdStr);
+                        contact.setStatus((byte) 1);
+                        contact.setAllowedBroadcast(true);
+                        contact.setAllowedSms(false);
+                        return contact;
+                    })
+                    .toList();
+
+            // Save and get back with IDs
+            List<ChatContacts> savedContacts = chatContactRepo.saveAll(newContacts);
+
+            // Collect new mobile -> contactId
+            for (ChatContacts saved : savedContacts) {
+                mobileToContactId.put(saved.getMobile(), saved.getId().longValue());
+            }
+
+            log.info("Created {} new contacts with IDs", savedContacts.size());
+        }
+
+        log.info("Total contacts with IDs: {}", mobileToContactId.size());
+        return mobileToContactId;
+    }
+
     /**
      * Ensures contacts exist for all given phone numbers.
      * Creates missing contacts without fetching parameters.
@@ -149,8 +219,7 @@ public class ChatContactServiceImpl {
         Map<String, ContactAttributes> existingAttributes = contact.getAttributes().stream()
                 .collect(Collectors.toMap(
                         ContactAttributes::getAttribute,
-                        attr -> attr
-                ));
+                        attr -> attr));
 
         for (Map.Entry<String, String> entry : attributes.entrySet()) {
             String key = entry.getKey();

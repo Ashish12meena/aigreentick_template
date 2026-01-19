@@ -36,6 +36,8 @@ import com.aigreentick.services.template.service.impl.broadcast.ReportServiceImp
 import com.aigreentick.services.template.service.impl.common.WalletServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.BlacklistServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.ChatContactServiceImpl;
+import com.aigreentick.services.template.service.impl.contact.ContactMessagesServiceImpl;
+
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -58,6 +60,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     private final TemplateBuilderForCsvServiceImpl csvTemplateBuilder;
     private final AsyncBatchDispatcherService asyncDispatchService;
     private final ObjectMapper objectMapper;
+    private final ContactMessagesServiceImpl contactMessagesService;
 
     @Value("${broadcast.batch-size:200}")
     private int batchSize;
@@ -108,14 +111,17 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         // ========== STEP 7: Deduct Wallet Balance ==========
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // ========== STEP 8: Create Reports (Batched) ==========
+        // ========== STEP 8: Create Reports & Capture IDs ==========
         log.info("Creating reports at: {}", LocalDateTime.now());
-        createReportsInBatches(user.getId(), broadcast.getId(), validNumbers);
+        Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-        // ========== STEP 9: Create Chat Contacts (Batched) ==========
+        // ========== STEP 9: Create Chat Contacts & Capture IDs ==========
         log.info("Creating chat contacts at: {}", LocalDateTime.now());
         Long countryId = request.getCountryId() != null ? request.getCountryId().longValue() : null;
-        createChatContactsInBatches(user.getId(), validNumbers, countryId);
+        Map<String, Long> mobileToContactId = createChatContactsAndGetIds(user.getId(), validNumbers, countryId);
+
+        // ========== STEP 10: Create ContactMessages (Async Background) ==========
+        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId);
 
         // ========== STEP 10: BUILD ALL TEMPLATES (Synchronous, Optimized) ==========
         log.info("=== PHASE 1: Building CSV templates for {} numbers ===", validNumbers.size());
@@ -288,8 +294,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         walletService.save(wallet);
     }
 
-    private void createReportsInBatches(Long userId, Long broadcastId, List<String> numbers) {
-        log.info("Creating reports for {} numbers in batches of {}", numbers.size(), batchSize);
+    private Map<String, Long> createReportsAndGetIds(Long userId, Long broadcastId, List<String> numbers) {
+        Map<String, Long> mobileToReportId = new HashMap<>();
 
         for (int i = 0; i < numbers.size(); i += batchSize) {
             int end = Math.min(i + batchSize, numbers.size());
@@ -309,18 +315,30 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                             .build())
                     .toList();
 
-            reportService.saveAll(reports);
+            List<Report> savedReports = reportService.saveAll(reports);
+
+            for (Report saved : savedReports) {
+                mobileToReportId.put(saved.getMobile(), saved.getId());
+            }
         }
-        log.info("Created {} reports", numbers.size());
+
+        log.info("Created {} reports with IDs", mobileToReportId.size());
+        return mobileToReportId;
     }
 
-    private void createChatContactsInBatches(Long userId, List<String> numbers, Long countryId) {
-        log.info("Creating contacts for {} numbers in batches of {}", numbers.size(), batchSize);
+    private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> numbers, Long countryId) {
+        Map<String, Long> mobileToContactId = new HashMap<>();
 
         for (int i = 0; i < numbers.size(); i += batchSize) {
             int end = Math.min(i + batchSize, numbers.size());
-            chatContactService.ensureContactsExist(userId, numbers.subList(i, end), countryId);
+            List<String> batch = numbers.subList(i, end);
+
+            Map<String, Long> batchResult = chatContactService.ensureContactsExistAndGetIds(userId, batch, countryId);
+            mobileToContactId.putAll(batchResult);
         }
-        log.info("Ensured {} contacts exist", numbers.size());
+
+        log.info("Ensured {} contacts with IDs", mobileToContactId.size());
+        return mobileToContactId;
     }
+
 }

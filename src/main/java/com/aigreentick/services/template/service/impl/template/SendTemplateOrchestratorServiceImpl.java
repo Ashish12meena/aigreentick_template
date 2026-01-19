@@ -1,6 +1,5 @@
-
 // ============================================================================
-// 1. OPTIMIZED NORMAL BROADCAST SERVICE
+// UPDATED SendTemplateOrchestratorServiceImpl.java
 // ============================================================================
 
 package com.aigreentick.services.template.service.impl.template;
@@ -41,6 +40,7 @@ import com.aigreentick.services.template.service.impl.broadcast.ReportServiceImp
 import com.aigreentick.services.template.service.impl.common.WalletServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.BlacklistServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.ChatContactServiceImpl;
+import com.aigreentick.services.template.service.impl.contact.ContactMessagesServiceImpl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -61,6 +61,7 @@ public class SendTemplateOrchestratorServiceImpl {
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
     private final ChatContactServiceImpl chatContactService;
+    private final ContactMessagesServiceImpl contactMessagesService; // NEW
     private final TemplateBuilderServiceImpl templateBuilder;
     private final AsyncBatchDispatcherService asyncDispatchService;
     private final ObjectMapper objectMapper;
@@ -75,18 +76,13 @@ public class SendTemplateOrchestratorServiceImpl {
     public TemplateResponseDto broadcastTemplate(SendTemplateRequestDto request, Long userId) {
         log.info("=== Starting optimized broadcast for userId: {} ===", userId);
 
-        // ========== STEP 1: Get User & WhatsApp Configuration ==========
+        // ========== STEP 1-7: Same as before ==========
         User user = userService.getActiveUserById(userId);
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
-
-        // ========== STEP 2: Get and Map Template ==========
         Template template = templateService.getTemplateById(request.getTemlateId());
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
-
-        // ========== STEP 3: Calculate Pricing ==========
         BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
 
-        // ========== STEP 4: Filter Blacklisted Numbers ==========
         List<String> validNumbers = blacklistService.filterBlockedNumbers(userId, request.getMobileNumbers());
         log.info("Filtered numbers: {} valid out of {} total", validNumbers.size(), request.getMobileNumbers().size());
 
@@ -94,30 +90,30 @@ public class SendTemplateOrchestratorServiceImpl {
             throw new IllegalArgumentException("No valid numbers after blacklist filtering");
         }
 
-        // ========== STEP 5: Validate Wallet Balance ==========
         BigDecimal totalDeduction = pricePerMessage.multiply(new BigDecimal(validNumbers.size()));
         if (BigDecimal.valueOf(user.getBalance()).compareTo(totalDeduction) < 0) {
             throw new InsufficientBalanceException(
-                    String.format("Insufficient balance. Required: %.2f, Available: %.2f", totalDeduction,
-                            user.getBalance()),
+                    String.format("Insufficient balance. Required: %.2f, Available: %.2f",
+                            totalDeduction, user.getBalance()),
                     402);
         }
 
-        // ========== STEP 6: Create Broadcast Record ==========
         Broadcast broadcast = createBroadcastRecord(request, user, config, validNumbers, template);
-
-        // ========== STEP 7: Deduct Wallet Balance ==========
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // ========== STEP 8: Create Reports (Batched) ==========
+        // ========== STEP 8: Create Reports & Capture IDs ==========
         log.info("Creating reports at: {}", LocalDateTime.now());
-        createReportsInBatches(user.getId(), broadcast.getId(), validNumbers);
+        Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-        // ========== STEP 9: Create Chat Contacts (Batched) ==========
+        // ========== STEP 9: Create Chat Contacts & Capture IDs ==========
         log.info("Creating chat contacts at: {}", LocalDateTime.now());
-        createChatContactsInBatches(user.getId(), validNumbers, request.getCountryId());
+        Map<String, Long> mobileToContactId = createChatContactsAndGetIds(
+                user.getId(), validNumbers, request.getCountryId());
 
-        // ========== STEP 10: BUILD ALL TEMPLATES (Synchronous, Optimized) ==========
+        // ========== STEP 10: Create ContactMessages (Async Background) ==========
+        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId);
+
+        // ========== STEP 11: Build Templates ==========
         log.info("=== PHASE 1: Building templates for {} numbers ===", validNumbers.size());
         long buildStart = System.currentTimeMillis();
 
@@ -127,7 +123,7 @@ public class SendTemplateOrchestratorServiceImpl {
         long buildDuration = System.currentTimeMillis() - buildStart;
         log.info("=== Built {} dispatch items in {}ms ===", allDispatchItems.size(), buildDuration);
 
-        // ========== STEP 11: DISPATCH ASYNC (Fire-and-forget) ==========
+        // ========== STEP 12: Dispatch Async ==========
         WhatsappAccountInfoDto accountInfo = WhatsappAccountInfoDto.builder()
                 .phoneNumberId(config.getWhatsappNoId())
                 .accessToken(config.getParmenentToken())
@@ -138,7 +134,6 @@ public class SendTemplateOrchestratorServiceImpl {
         CompletableFuture<Void> dispatchFuture = asyncDispatchService.dispatchAsync(
                 allDispatchItems, accountInfo, broadcast.getId());
 
-        // Optional: Add completion handler
         dispatchFuture.whenComplete((result, throwable) -> {
             if (throwable != null) {
                 log.error("Async dispatch failed for broadcastId: {}", broadcast.getId(), throwable);
@@ -156,64 +151,64 @@ public class SendTemplateOrchestratorServiceImpl {
                 .build();
     }
 
-    // ==================== PHASE 1: BUILD ALL TEMPLATES ====================
+    // ==================== NEW: Create Reports & Return ID Map ====================
 
-    /**
-     * Build all dispatch items in batches to manage memory.
-     * Builds MessageRequest -> Serializes to JSON -> Discards MessageRequest.
-     * Only keeps lightweight DispatchItem (mobile + JSON string).
-     */
-    private List<BroadcastDispatchItemDto> buildAllDispatchItemsInBatches(
-            Long userId,
-            List<String> phoneNumbers,
-            TemplateDto templateDto,
-            SendTemplateRequestDto request,
-            Long broadcastId) {
+    private Map<String, Long> createReportsAndGetIds(Long userId, Long broadcastId, List<String> validNumbers) {
+        Map<String, Long> mobileToReportId = new HashMap<>();
 
-        List<BroadcastDispatchItemDto> allItems = new ArrayList<>(phoneNumbers.size());
-        int totalBatches = (phoneNumbers.size() + buildBatchSize - 1) / buildBatchSize;
+        for (int i = 0; i < validNumbers.size(); i += batchSize) {
+            int end = Math.min(i + batchSize, validNumbers.size());
+            List<String> batch = validNumbers.subList(i, end);
 
-        log.info("Building templates in {} batches of {} numbers", totalBatches, buildBatchSize);
-
-        for (int i = 0; i < phoneNumbers.size(); i += buildBatchSize) {
-            int end = Math.min(i + buildBatchSize, phoneNumbers.size());
-            List<String> batch = phoneNumbers.subList(i, end);
-            int batchNum = (i / buildBatchSize) + 1;
-
-            log.debug("Building batch {}/{} ({} numbers)", batchNum, totalBatches, batch.size());
-
-            // Build templates for this batch
-            List<MessageRequest> messageRequests = templateBuilder.buildSendableTemplates(
-                    userId, batch, templateDto, request);
-
-            // Immediately serialize and convert to lightweight dispatch items
-            for (MessageRequest msg : messageRequests) {
-                try {
-                    String payload = objectMapper
-                            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
-                            .writeValueAsString(msg);
-
-                    allItems.add(BroadcastDispatchItemDto.builder()
+            List<Report> reports = batch.stream()
+                    .map(mobile -> Report.builder()
+                            .userId(userId)
                             .broadcastId(broadcastId)
-                            .mobileNo(msg.getTo())
-                            .payload(payload)
-                            .build());
+                            .mobile(mobile)
+                            .type("template")
+                            .status("pending")
+                            .messageStatus("pending")
+                            .platform(Platform.web)
+                            .createdAt(LocalDateTime.now())
+                            .updatedAt(LocalDateTime.now())
+                            .build())
+                    .toList();
 
-                } catch (Exception e) {
-                    log.error("Failed to serialize message for {}: {}", msg.getTo(), e.getMessage());
-                    // Continue with other messages
-                }
+            // Save and get back with IDs
+            List<Report> savedReports = reportService.saveAll(reports);
+
+            // Collect mobile -> reportId mapping
+            for (Report saved : savedReports) {
+                mobileToReportId.put(saved.getMobile(), saved.getId());
             }
-
-            // MessageRequest objects are now garbage collected
-            log.debug("Batch {}/{} completed - {} items serialized", batchNum, totalBatches, batch.size());
         }
 
-        log.info("Successfully built {} dispatch items", allItems.size());
-        return allItems;
+        log.info("Created {} reports with IDs", mobileToReportId.size());
+        return mobileToReportId;
     }
 
-    // ==================== HELPER METHODS (unchanged) ====================
+    // ==================== NEW: Create Contacts & Return ID Map
+    // ====================
+
+    private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> mobileNumbers, Long countryId) {
+        Map<String, Long> mobileToContactId = new HashMap<>();
+
+        for (int i = 0; i < mobileNumbers.size(); i += batchSize) {
+            int end = Math.min(i + mobileNumbers.size(), mobileNumbers.size());
+            List<String> batch = mobileNumbers.subList(i, end);
+
+            // This returns Map<String, Long> of mobile -> contactId
+            Map<String, Long> batchResult = chatContactService.ensureContactsExistAndGetIds(
+                    userId, batch, countryId);
+
+            mobileToContactId.putAll(batchResult);
+        }
+
+        log.info("Ensured {} contacts with IDs", mobileToContactId.size());
+        return mobileToContactId;
+    }
+
+    // ==================== HELPER METHODS (Same as before) ====================
 
     private BigDecimal getPricePerMessage(Long userId, String templateCategory, User user) {
         Double charge = switch (TemplateCategory.valueOf(templateCategory)) {
@@ -272,33 +267,46 @@ public class SendTemplateOrchestratorServiceImpl {
                 .build());
     }
 
-    private void createReportsInBatches(Long userId, Long broadcastId, List<String> validNumbers) {
-        for (int i = 0; i < validNumbers.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, validNumbers.size());
-            List<String> batch = validNumbers.subList(i, end);
+    private List<BroadcastDispatchItemDto> buildAllDispatchItemsInBatches(
+            Long userId, List<String> phoneNumbers, TemplateDto templateDto,
+            SendTemplateRequestDto request, Long broadcastId) {
 
-            List<Report> reports = batch.stream()
-                    .map(mobile -> Report.builder()
-                            .userId(userId)
+        List<BroadcastDispatchItemDto> allItems = new ArrayList<>(phoneNumbers.size());
+        int totalBatches = (phoneNumbers.size() + buildBatchSize - 1) / buildBatchSize;
+
+        log.info("Building templates in {} batches of {} numbers", totalBatches, buildBatchSize);
+
+        for (int i = 0; i < phoneNumbers.size(); i += buildBatchSize) {
+            int end = Math.min(i + buildBatchSize, phoneNumbers.size());
+            List<String> batch = phoneNumbers.subList(i, end);
+            int batchNum = (i / buildBatchSize) + 1;
+
+            log.debug("Building batch {}/{} ({} numbers)", batchNum, totalBatches, batch.size());
+
+            List<MessageRequest> messageRequests = templateBuilder.buildSendableTemplates(
+                    userId, batch, templateDto, request);
+
+            for (MessageRequest msg : messageRequests) {
+                try {
+                    String payload = objectMapper
+                            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+                            .writeValueAsString(msg);
+
+                    allItems.add(BroadcastDispatchItemDto.builder()
                             .broadcastId(broadcastId)
-                            .mobile(mobile)
-                            .type("template")
-                            .status("pending")
-                            .messageStatus("pending")
-                            .platform(Platform.web)
-                            .createdAt(LocalDateTime.now())
-                            .updatedAt(LocalDateTime.now())
-                            .build())
-                    .toList();
+                            .mobileNo(msg.getTo())
+                            .payload(payload)
+                            .build());
 
-            reportService.saveAll(reports);
-        }
-    }
+                } catch (Exception e) {
+                    log.error("Failed to serialize message for {}: {}", msg.getTo(), e.getMessage());
+                }
+            }
 
-    private void createChatContactsInBatches(Long userId, List<String> mobileNumbers, Long countryId) {
-        for (int i = 0; i < mobileNumbers.size(); i += batchSize) {
-            int end = Math.min(i + batchSize, mobileNumbers.size());
-            chatContactService.ensureContactsExist(userId, mobileNumbers.subList(i, end), countryId);
+            log.debug("Batch {}/{} completed - {} items serialized", batchNum, totalBatches, batch.size());
         }
+
+        log.info("Successfully built {} dispatch items", allItems.size());
+        return allItems;
     }
 }
