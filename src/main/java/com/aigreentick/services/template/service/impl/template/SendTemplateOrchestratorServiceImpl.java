@@ -36,7 +36,6 @@ import com.aigreentick.services.template.service.impl.broadcast.BroadcastService
 import com.aigreentick.services.template.service.impl.broadcast.ReportServiceImpl;
 import com.aigreentick.services.template.service.impl.common.WalletServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.BlacklistServiceImpl;
-import com.aigreentick.services.template.service.impl.contact.ChatContactServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.ContactMessagesServiceImpl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -47,9 +46,9 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Orchestrates the WhatsApp template broadcast workflow.
  * 
- * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast 
- *       -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages 
- *       -> Build Templates -> Dispatch Async
+ * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast
+ * -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages
+ * -> Build Templates -> Dispatch Async
  */
 @Service
 @Slf4j
@@ -64,7 +63,6 @@ public class SendTemplateOrchestratorServiceImpl {
     private final BroadcastServiceImpl broadcastService;
     private final ReportServiceImpl reportService;
     private final WalletServiceImpl walletService;
-    private final ChatContactServiceImpl chatContactService;
     private final ContactMessagesServiceImpl contactMessagesService;
     private final TemplateBuilderServiceImpl templateBuilder;
     private final AsyncBatchDispatcherService asyncDispatchService;
@@ -92,7 +90,7 @@ public class SendTemplateOrchestratorServiceImpl {
         WhatsappAccount config = whatsappAccountService.getActiveAccountByUserId(user.getId());
         Template template = templateService.getTemplateById(request.getTemplateId());
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
-        
+
         // Step 4: Get price based on template category (AUTH/UTILITY/MARKETING)
         BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
 
@@ -117,17 +115,17 @@ public class SendTemplateOrchestratorServiceImpl {
         Broadcast broadcast = createBroadcastRecord(request, user, config, validNumbers, template);
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
-        // Step 8: Create report entries for each recipient (for tracking delivery status)
+        // Step 8: Create report entries for each recipient (for tracking delivery
+        // status)
         log.info("Creating reports at: {}", LocalDateTime.now());
         Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-        // Step 9: Ensure chat contacts exist (creates if not present, returns IDs)
-        log.info("Creating chat contacts at: {}", LocalDateTime.now());
-        Map<String, Long> mobileToContactId = createChatContactsAndGetIds(
-                user.getId(), validNumbers, request.getCountryId());
-
-        // Step 10: Link contacts to messages via junction table (async, non-blocking)
-        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId,user.getId());
+        // Step 9: Create contacts and link messages (chained async - fire and forget)
+        log.info(" Starting chained async for contacts + messages ===");
+        contactMessagesService.createContactsAndLinkMessagesAsync(
+                mobileToReportId,
+                user.getId(),
+                request.getCountryId());
 
         // Step 11: Build WhatsApp API payloads for all recipients
         log.info("=== PHASE 1: Building templates for {} numbers ===", validNumbers.size());
@@ -202,27 +200,6 @@ public class SendTemplateOrchestratorServiceImpl {
 
         log.info("Created {} reports with IDs", mobileToReportId.size());
         return mobileToReportId;
-    }
-
-    /**
-     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId mapping.
-     * Creates new contacts if they don't exist.
-     */
-    private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> mobileNumbers, Long countryId) {
-        Map<String, Long> mobileToContactId = new HashMap<>();
-
-        for (int i = 0; i < mobileNumbers.size(); i += batchSize) {
-            int end = Math.min(i + mobileNumbers.size(), mobileNumbers.size());
-            List<String> batch = mobileNumbers.subList(i, end);
-
-            Map<String, Long> batchResult = chatContactService.ensureContactsExistAndGetIds(
-                    userId, batch, countryId);
-
-            mobileToContactId.putAll(batchResult);
-        }
-
-        log.info("Ensured {} contacts with IDs", mobileToContactId.size());
-        return mobileToContactId;
     }
 
     /**

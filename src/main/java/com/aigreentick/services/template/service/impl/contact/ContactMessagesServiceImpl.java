@@ -22,16 +22,64 @@ import lombok.extern.slf4j.Slf4j;
 public class ContactMessagesServiceImpl {
 
     private final ContactMessagesRepository contactMessagesRepository;
+    private final ChatContactServiceImpl chatContactService;
 
     @Value("${broadcast.batch-size:200}")
     private int batchSize;
 
     /**
-     * Asynchronously creates ContactMessages using pre-collected ID maps.
-     * No additional DB queries needed - IDs are passed directly.
+     * NEW: Chained async method that handles both:
+     * 1. Creating/fetching ChatContacts and getting their IDs
+     * 2. Creating ContactMessages linking reports to contacts
+     * 
+     * This is fire-and-forget - orchestrator doesn't wait for completion.
      *
-     * @param mobileToReportId  Map of mobile -> reportId (from saved reports)
-     * @param mobileToContactId Map of mobile -> contactId (from saved contacts)
+     * @param mobileToReportId Map of mobile -> reportId (from saved reports)
+     * @param userId           User ID for contact ownership
+     * @param countryId        Country ID for new contacts
+     */
+    @Async("messageDispatchExecutor")
+    public void createContactsAndLinkMessagesAsync(
+            Map<String, Long> mobileToReportId,
+            Long userId,
+            Long countryId) {
+
+        log.info("[ContactsAndMessages] Starting chained async for {} mobiles, userId={}",
+                mobileToReportId.size(), userId);
+
+        long startTime = System.currentTimeMillis();
+
+        try {
+            // Step 1: Create/fetch contacts and get their IDs
+            List<String> mobileNumbers = new ArrayList<>(mobileToReportId.keySet());
+            
+            log.info("[ContactsAndMessages] Step 1: Ensuring contacts exist for {} numbers", mobileNumbers.size());
+            Map<String, Long> mobileToContactId = chatContactService.ensureContactsExistAndGetIds(
+                    userId, mobileNumbers, countryId);
+            
+            log.info("[ContactsAndMessages] Step 1 complete: {} contacts ready", mobileToContactId.size());
+
+            // Step 2: Create ContactMessages linking reports to contacts
+            log.info("[ContactsAndMessages] Step 2: Creating contact-message links");
+            createContactMessagesInBatches(mobileToReportId, mobileToContactId, userId);
+
+            long duration = System.currentTimeMillis() - startTime;
+            log.info("[ContactsAndMessages] Completed in {}ms - {} contacts, {} links created",
+                    duration, mobileToContactId.size(), mobileToReportId.size());
+
+        } catch (Exception e) {
+            long duration = System.currentTimeMillis() - startTime;
+            log.error("[ContactsAndMessages] Failed after {}ms for userId={}: {}",
+                    duration, userId, e.getMessage(), e);
+            // Don't rethrow - this is fire-and-forget
+        }
+    }
+
+    /**
+     * DEPRECATED: Use createContactsAndLinkMessagesAsync instead.
+     * Kept for backward compatibility if needed.
+     * 
+     * Asynchronously creates ContactMessages using pre-collected ID maps.
      */
     @Async("messageDispatchExecutor")
     public void createContactMessagesAsync(
@@ -70,6 +118,7 @@ public class ContactMessagesServiceImpl {
 
         List<ContactMessages> allMessages = new ArrayList<>();
         LocalDateTime now = LocalDateTime.now();
+        int skippedCount = 0;
 
         for (String mobile : mobiles) {
             Long reportId = mobileToReportId.get(mobile);
@@ -93,6 +142,7 @@ public class ContactMessagesServiceImpl {
                     allMessages.clear();
                 }
             } else {
+                skippedCount++;
                 log.debug("[ContactMessages] Skipping mobile: {} (reportId: {}, contactId: {})",
                         mobile, reportId, contactId);
             }
@@ -103,9 +153,13 @@ public class ContactMessagesServiceImpl {
             contactMessagesRepository.saveAll(allMessages);
             log.debug("[ContactMessages] Saved final batch of {} records", allMessages.size());
         }
+
+        if (skippedCount > 0) {
+            log.warn("[ContactMessages] Skipped {} mobiles due to missing IDs", skippedCount);
+        }
     }
 
-    // Other helper methods...
+    // ==================== EXISTING HELPER METHODS ====================
 
     @Transactional
     public ContactMessages save(ContactMessages contactMessages) {

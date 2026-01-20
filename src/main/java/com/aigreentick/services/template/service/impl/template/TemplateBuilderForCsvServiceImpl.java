@@ -76,19 +76,45 @@ public class TemplateBuilderForCsvServiceImpl {
                 .build();
     }
 
+    /**
+     * Parse CSV variables with REINDEXING.
+     * 
+     * Key Feature: Ignores the incoming "variable" keys and reindexes based on array position.
+     * 
+     * Example transformations:
+     * - Input: [{"variable": 0, "value": "John"}, {"variable": 1, "value": "Doe"}]
+     *   Output: {1: "John", 2: "Doe"}
+     * 
+     * - Input: [{"variable": 5, "value": "Alice"}, {"variable": 10, "value": "Smith"}]
+     *   Output: {1: "Alice", 2: "Smith"}
+     * 
+     * This ensures WhatsApp template variables {{1}}, {{2}}, etc. are always correctly mapped
+     * regardless of how the frontend/CSV sends the keys.
+     */
     private void parseCsvVariables(List<VariableGroupDto> variables,
             Map<String, Map<Integer, String>> perContact, Map<Integer, String> global) {
         if (variables == null) return;
 
         for (VariableGroupDto group : variables) {
             Map<Integer, String> varMap = new HashMap<>();
+            
             if (group.getVariable() != null) {
-                for (VariableDto v : group.getVariable()) {
-                    if (v.getVariable() != null && v.getValue() != null) {
-                        varMap.put(v.getVariable(), v.getValue());
+                List<VariableDto> sortedVars = new ArrayList<>(group.getVariable());
+                
+                // CRITICAL CHANGE: Reindex based on array position (1-based)
+                for (int i = 0; i < sortedVars.size(); i++) {
+                    VariableDto v = sortedVars.get(i);
+                    if (v.getValue() != null) {
+                        // Use array position + 1 as the key (1-based indexing for WhatsApp)
+                        int reindexedKey = i + 1;
+                        varMap.put(reindexedKey, v.getValue());
+                        
+                        log.debug("Reindexed variable: original key={}, new key={}, value={}", 
+                                v.getVariable(), reindexedKey, v.getValue());
                     }
                 }
             }
+            
             if (group.getMobile() != null) {
                 perContact.put(String.valueOf(group.getMobile()), varMap);
             } else {
@@ -105,7 +131,7 @@ public class TemplateBuilderForCsvServiceImpl {
             if (card.getCardIndex() == null) continue;
 
             result.put(card.getCardIndex(), CardParameters.builder()
-                    .bodyVariables(parseStringKeys(card.getVariables()))
+                    .bodyVariables(parseStringKeysWithReindexing(card.getVariables()))
                     .buttonVariables(parseButtonVars(card.getButtons()))
                     .imageUrl(card.getImageUrl())
                     .build());
@@ -119,19 +145,66 @@ public class TemplateBuilderForCsvServiceImpl {
 
         for (int i = 0; i < buttons.size(); i++) {
             if (buttons.get(i).getVariables() != null) {
-                result.put(i, parseStringKeys(buttons.get(i).getVariables()));
+                result.put(i, parseStringKeysWithReindexing(buttons.get(i).getVariables()));
             }
         }
         return result;
     }
 
-    private Map<Integer, String> parseStringKeys(Map<String, String> input) {
+    /**
+     * Parse string keys and REINDEX them based on sorted order.
+     * 
+     * Example:
+     * - Input: {"5": "Alice", "10": "Smith"}
+     * - Output: {1: "Alice", 2: "Smith"}
+     * 
+     * Steps:
+     * 1. Sort entries by their numeric key
+     * 2. Assign sequential indices starting from 1
+     */
+    private Map<Integer, String> parseStringKeysWithReindexing(Map<String, String> input) {
         Map<Integer, String> result = new HashMap<>();
-        if (input == null) return result;
-        input.forEach((k, v) -> {
-            try { result.put(Integer.parseInt(k), v); } catch (NumberFormatException ignored) {}
-        });
+        if (input == null || input.isEmpty()) return result;
+
+        try {
+            // Convert to list of entries with numeric keys
+            List<Map.Entry<Integer, String>> entries = new ArrayList<>();
+            
+            for (Map.Entry<String, String> entry : input.entrySet()) {
+                try {
+                    int key = Integer.parseInt(entry.getKey());
+                    entries.add(Map.entry(key, entry.getValue()));
+                } catch (NumberFormatException e) {
+                    log.warn("Skipping non-numeric key in carousel variables: {}", entry.getKey());
+                }
+            }
+            
+            // Sort by original key (just for consistency, not strictly required)
+            entries.sort(Map.Entry.comparingByKey());
+            
+            // Reindex starting from 1
+            for (int i = 0; i < entries.size(); i++) {
+                result.put(i + 1, entries.get(i).getValue());
+                
+                log.debug("Carousel variable reindex: original key={}, new key={}, value={}", 
+                        entries.get(i).getKey(), i + 1, entries.get(i).getValue());
+            }
+            
+        } catch (Exception e) {
+            log.error("Error parsing carousel variables with reindexing", e);
+        }
+        
         return result;
+    }
+
+    /**
+     * Legacy method - kept for backward compatibility but updated to use reindexing
+     * 
+     * @deprecated Use parseStringKeysWithReindexing instead
+     */
+    @Deprecated
+    private Map<Integer, String> parseStringKeys(Map<String, String> input) {
+        return parseStringKeysWithReindexing(input);
     }
 
     private Map<String, String> buildFallbackValues(TemplateDto template) {
@@ -336,7 +409,10 @@ public class TemplateBuilderForCsvServiceImpl {
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto t : texts) {
             int varIdx = t.getTextIndex() != null ? t.getTextIndex() : 0;
-            String val = csvParams.getBodyVariables().get(varIdx + 1); // 1-based in CSV
+            
+            // IMPORTANT: varIdx is 0-based from template, but we look up with 1-based key
+            // because parseCarouselParams now uses 1-based indexing
+            String val = csvParams.getBodyVariables().get(varIdx + 1);
             if (val == null || val.isBlank()) {
                 val = ctx.getFallbackValues().getOrDefault(
                         compositeKey(t.getType(), t.getTextIndex(), cardIdx, true), "");
@@ -365,6 +441,8 @@ public class TemplateBuilderForCsvServiceImpl {
 
             if (type == ButtonTypes.URL) {
                 Map<Integer, String> btnVars = csvParams.getButtonVariables().getOrDefault(i, new HashMap<>());
+                
+                // Look up with 1-based key (always 1 for URL buttons)
                 String val = btnVars.get(1);
                 if (val == null && btn.getExample() != null && !btn.getExample().isEmpty()) {
                     val = btn.getExample().get(0);
@@ -406,14 +484,14 @@ public class TemplateBuilderForCsvServiceImpl {
             if (attrVal != null && !attrVal.isBlank()) return attrVal;
         }
 
-        // 2. Per-contact CSV
+        // 2. Per-contact CSV (now using 1-based indexing)
         String perContact = ctx.getPerContactVariables()
                 .getOrDefault(phone, new HashMap<>())
-                .get(varIdx + 1);
+                .get(varIdx + 1); // 1-based lookup
         if (perContact != null && !perContact.isBlank()) return perContact;
 
-        // 3. Global CSV
-        String global = ctx.getGlobalVariables().get(varIdx + 1);
+        // 3. Global CSV (now using 1-based indexing)
+        String global = ctx.getGlobalVariables().get(varIdx + 1); // 1-based lookup
         if (global != null && !global.isBlank()) return global;
 
         // 4. Fallback
