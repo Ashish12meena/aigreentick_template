@@ -42,7 +42,7 @@ messaging-service:
 
 # ---------- Broadcast Configuration ----------
 broadcast:
-  batch-size: 200          # For reports & contacts
+  batch-size: 100          # For reports & contacts
   dispatch-chunk-size: 100 # For messaging service dispatch (per async chunk)
 
 # ---------- Async Dispatch Configuration ----------

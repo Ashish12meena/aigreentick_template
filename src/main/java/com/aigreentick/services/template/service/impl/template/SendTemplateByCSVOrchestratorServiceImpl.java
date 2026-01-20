@@ -72,7 +72,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     private final ObjectMapper objectMapper;
     private final ContactMessagesServiceImpl contactMessagesService;
 
-    @Value("${broadcast.batch-size:200}")
+    @Value("${broadcast.batch-size:1000}")
     private int batchSize;
 
     @Value("${broadcast.build-batch-size:500}")
