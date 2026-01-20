@@ -173,6 +173,15 @@ public class TemplateServiceImpl {
 
     @Transactional
     public void deleteAllTemplatesByUserId(Long userId) {
-        templateRepository.deleteAllByUserId(userId);
+        log.info("Deleting all templates for userId: {}", userId);
+
+        // Fetch templates (this loads them into persistence context)
+        List<Template> templates = templateRepository.findByUserIdAndDeletedAtIsNull(userId);
+
+        if (!templates.isEmpty()) {
+            // deleteAll triggers CascadeType.ALL on children
+            templateRepository.deleteAll(templates);
+            log.info("Deleted {} templates for userId: {}", templates.size(), userId);
+        }
     }
 }

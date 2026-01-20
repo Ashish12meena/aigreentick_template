@@ -83,6 +83,13 @@ public class TemplateCarouselCard {
         LocalDateTime now = LocalDateTime.now(IST);
         this.createdAt = now;
         this.updatedAt = now;
+        
+        // Auto-populate templateId from parent chain
+        if (this.templateId == null && this.component != null 
+                && this.component.getTemplate() != null 
+                && this.component.getTemplate().getId() != null) {
+            this.templateId = this.component.getTemplate().getId();
+        }
     }
 
     @PreUpdate
@@ -94,5 +101,4 @@ public class TemplateCarouselCard {
     protected void onDelete() {
         this.deletedAt = LocalDateTime.now(IST);
     }
-
 }

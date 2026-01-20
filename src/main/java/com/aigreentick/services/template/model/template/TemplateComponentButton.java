@@ -47,14 +47,14 @@ public class TemplateComponentButton {
      */
     @Column(name = "otp_type")
     @Enumerated(EnumType.STRING)
-    private OtpTypes otpType; // new
-    
+    private OtpTypes otpType;
+
     @Column(name = "number")
     private String number;
-    
+
     @Column(name = "text")
     private String text;
-    
+
     @Column(name = "url")
     private String url;
 
@@ -62,20 +62,20 @@ public class TemplateComponentButton {
      * Index of the button within the component (used for ordering).
      */
     @Column(name = "button_index")
-    private Integer buttonIndex; // new
+    private Integer buttonIndex;
 
     /**
      * Autofill text to pre-fill in the message for QUICK_REPLY buttons.
      */
     @Column(name = "autofill_text")
-    private String autofillText; // new
-    
+    private String autofillText;
+
     @Column(name = "example")
-    List<String> example;// new
+    List<String> example;
 
     @OneToMany(mappedBy = "button", cascade = CascadeType.ALL, orphanRemoval = true)
     @Builder.Default
-    private List<SupportedApp> supportedApps = new ArrayList<>(); // new
+    private List<SupportedApp> supportedApps = new ArrayList<>();
 
     @Column(name = "created_at")
     private LocalDateTime createdAt;
@@ -98,11 +98,18 @@ public class TemplateComponentButton {
         app.setButton(null);
     }
 
-        @PrePersist
+    @PrePersist
     protected void onCreate() {
         LocalDateTime now = LocalDateTime.now(IST);
         this.createdAt = now;
         this.updatedAt = now;
+
+        // Auto-populate templateId from parent chain
+        if (this.templateId == null && this.component != null
+                && this.component.getTemplate() != null
+                && this.component.getTemplate().getId() != null) {
+            this.templateId = this.component.getTemplate().getId();
+        }
     }
 
     @PreUpdate

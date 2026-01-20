@@ -131,7 +131,7 @@ public class WhatsappClientImpl {
                                         .bodyToMono(JsonNode.class)
                                         .block();
 
-                        log.info("Fetched all templates. WABA_ID={} URI={} Response={}", wabaId, uri, response);
+                        // log.info("Fetched all templates. WABA_ID={} URI={} Response={}", wabaId, uri, response);
                         return FacebookApiResponse.success(response, 200);
 
                 } catch (WebClientResponseException ex) {
