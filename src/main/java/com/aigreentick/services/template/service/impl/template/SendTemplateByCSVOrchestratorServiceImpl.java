@@ -72,6 +72,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     private final ObjectMapper objectMapper;
     private final ContactMessagesServiceImpl contactMessagesService;
 
+
     @Value("${broadcast.batch-size:1000}")
     private int batchSize;
 
@@ -131,13 +132,12 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
         log.info("Creating reports at: {}", LocalDateTime.now());
         Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-        // Step 10: Ensure chat contacts exist and get their IDs
-        log.info("Creating chat contacts at: {}", LocalDateTime.now());
-        Long countryId = request.getCountryId() != null ? request.getCountryId().longValue() : null;
-        Map<String, Long> mobileToContactId = createChatContactsAndGetIds(user.getId(), validNumbers, countryId);
-
-        // Step 11: Link contacts to messages via junction table (async, non-blocking)
-        contactMessagesService.createContactMessagesAsync(mobileToReportId, mobileToContactId,user.getId());
+        // Step 9: Create contacts and link messages (chained async - fire and forget)
+        log.info(" Starting chained async for contacts + messages ===");
+        contactMessagesService.createContactsAndLinkMessagesAsync(
+                mobileToReportId,
+                user.getId(),
+                Long.valueOf(request.getCountryId()));
 
         // Step 12: Build WhatsApp API payloads with CSV-specific variables
         log.info("=== PHASE 1: Building CSV templates for {} numbers ===", validNumbers.size());
