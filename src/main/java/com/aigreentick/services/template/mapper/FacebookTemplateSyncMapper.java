@@ -199,6 +199,8 @@ public class FacebookTemplateSyncMapper {
 
         if (!allParameters.isEmpty()) {
             card.setParameters(serializeToJson(allParameters));
+        }else{
+            card.setParameters("[]");
         }
 
         return card;
