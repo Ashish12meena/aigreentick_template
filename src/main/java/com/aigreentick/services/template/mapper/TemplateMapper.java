@@ -189,16 +189,17 @@ public class TemplateMapper {
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
             String exampleValue = headerTexts.get(i);
+            // Use i + 1 for 1-based indexing
             template.addText(buildTemplateText(
                     "HEADER",
                     exampleValue,
-                    i,
+                    i + 1, // Changed from i to i + 1
                     false,
                     null,
                     null,
                     component));
         }
-        log.debug("Extracted {} HEADER text variables with examples", headerTexts.size());
+        log.debug("Extracted {} HEADER text variables with 1-based indexing", headerTexts.size());
     }
 
     /**
@@ -212,16 +213,17 @@ public class TemplateMapper {
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
             String exampleValue = bodyTexts.get(i);
+            // Use i + 1 for 1-based indexing
             template.addText(buildTemplateText(
                     "BODY",
                     exampleValue,
-                    i,
+                    i + 1, // Changed from i to i + 1
                     false,
                     null,
                     null,
                     component));
         }
-        log.debug("Extracted {} BODY text variables with examples", bodyTexts.size());
+        log.debug("Extracted {} BODY text variables with 1-based indexing", bodyTexts.size());
     }
 
     /**
@@ -241,16 +243,17 @@ public class TemplateMapper {
 
             for (int i = 0; i < examples.size(); i++) {
                 String exampleValue = examples.get(i);
+                // Use i + 1 for 1-based indexing
                 template.addText(buildTemplateText(
                         "BUTTON",
                         exampleValue,
-                        i,
+                        i + 1, // Changed from i to i + 1
                         false,
                         null,
                         null,
                         component));
             }
-            log.debug("Extracted {} BUTTON text variables for button index {} with examples",
+            log.debug("Extracted {} BUTTON text variables for button index {} with 1-based indexing",
                     examples.size(), buttonIndex);
         }
     }
@@ -298,16 +301,17 @@ public class TemplateMapper {
             List<String> headerTexts = example.getHeaderText();
             for (int i = 0; i < headerTexts.size(); i++) {
                 String exampleValue = headerTexts.get(i);
+                // Use i + 1 for 1-based indexing
                 template.addText(buildTemplateText(
                         "HEADER",
                         exampleValue,
-                        i,
+                        i + 1, // Changed from i to i + 1
                         true,
                         cardIndex,
                         null,
                         carouselComponent));
             }
-            log.debug("Extracted {} HEADER variables for card {} with examples",
+            log.debug("Extracted {} HEADER variables for card {} with 1-based indexing",
                     headerTexts.size(), cardIndex);
         }
     }
@@ -323,16 +327,17 @@ public class TemplateMapper {
             List<String> bodyTexts = example.getBodyText().get(0);
             for (int i = 0; i < bodyTexts.size(); i++) {
                 String exampleValue = bodyTexts.get(i);
+                // Use i + 1 for 1-based indexing
                 template.addText(buildTemplateText(
                         "BODY",
                         exampleValue,
-                        i,
+                        i + 1, // Changed from i to i + 1
                         true,
                         cardIndex,
                         null,
                         carouselComponent));
             }
-            log.debug("Extracted {} BODY variables for card {} with examples",
+            log.debug("Extracted {} BODY variables for card {} with 1-based indexing",
                     bodyTexts.size(), cardIndex);
         }
     }
@@ -352,16 +357,17 @@ public class TemplateMapper {
 
             for (int i = 0; i < examples.size(); i++) {
                 String exampleValue = examples.get(i);
+                // Use i + 1 for 1-based indexing
                 template.addText(buildTemplateText(
                         "BUTTON",
                         exampleValue,
-                        buttonIndex,
+                        i + 1, // Changed from i to i + 1
                         true,
                         cardIndex,
                         null,
                         carouselComponent));
             }
-            log.debug("Extracted {} BUTTON variables for card {} button {} with examples",
+            log.debug("Extracted {} BUTTON variables for card {} button {} with 1-based indexing",
                     examples.size(), cardIndex, buttonIndex);
         }
     }

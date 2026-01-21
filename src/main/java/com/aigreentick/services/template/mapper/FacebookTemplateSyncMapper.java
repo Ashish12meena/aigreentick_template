@@ -327,9 +327,10 @@ public class FacebookTemplateSyncMapper {
 
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
-            template.addText(buildTemplateText("HEADER", headerTexts.get(i), i, false, null, component));
+            // Use i + 1 for 1-based indexing
+            template.addText(buildTemplateText("HEADER", headerTexts.get(i), i + 1, false, null, component));
         }
-        log.debug("Extracted {} HEADER variables", headerTexts.size());
+        log.debug("Extracted {} HEADER variables with 1-based indexing", headerTexts.size());
     }
 
     /**
@@ -345,9 +346,10 @@ public class FacebookTemplateSyncMapper {
 
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
-            template.addText(buildTemplateText("BODY", bodyTexts.get(i), i, false, null, component));
+            // Use i + 1 for 1-based indexing
+            template.addText(buildTemplateText("BODY", bodyTexts.get(i), i + 1, false, null, component));
         }
-        log.debug("Extracted {} BODY variables", bodyTexts.size());
+        log.debug("Extracted {} BODY variables with 1-based indexing", bodyTexts.size());
     }
 
     /**
@@ -369,9 +371,11 @@ public class FacebookTemplateSyncMapper {
             List<String> examples = btn.getExample();
 
             for (int i = 0; i < examples.size(); i++) {
-                template.addText(buildTemplateText("BUTTON", examples.get(i), i, false, null, component));
+                // Use i + 1 for 1-based indexing
+                template.addText(buildTemplateText("BUTTON", examples.get(i), i + 1, false, null, component));
             }
-            log.debug("Extracted {} BUTTON variables for button {}", examples.size(), buttonIndex);
+            log.debug("Extracted {} BUTTON variables for button {} with 1-based indexing",
+                    examples.size(), buttonIndex);
         }
     }
 
@@ -423,10 +427,12 @@ public class FacebookTemplateSyncMapper {
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
             List<String> headerTexts = example.getHeaderText();
             for (int i = 0; i < headerTexts.size(); i++) {
+                // Use i + 1 for 1-based indexing
                 template.addText(
-                        buildTemplateText("HEADER", headerTexts.get(i), i, true, cardIndex, carouselComponent));
+                        buildTemplateText("HEADER", headerTexts.get(i), i + 1, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} HEADER variables for card {}", headerTexts.size(), cardIndex);
+            log.debug("Extracted {} HEADER variables for card {} with 1-based indexing",
+                    headerTexts.size(), cardIndex);
         }
     }
 
@@ -443,9 +449,12 @@ public class FacebookTemplateSyncMapper {
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
             List<String> bodyTexts = example.getBodyText().get(0);
             for (int i = 0; i < bodyTexts.size(); i++) {
-                template.addText(buildTemplateText("BODY", bodyTexts.get(i), i, true, cardIndex, carouselComponent));
+                // Use i + 1 for 1-based indexing
+                template.addText(
+                        buildTemplateText("BODY", bodyTexts.get(i), i + 1, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} BODY variables for card {}", bodyTexts.size(), cardIndex);
+            log.debug("Extracted {} BODY variables for card {} with 1-based indexing",
+                    bodyTexts.size(), cardIndex);
         }
     }
 
@@ -466,10 +475,12 @@ public class FacebookTemplateSyncMapper {
             List<String> examples = btn.getExample();
 
             for (int i = 0; i < examples.size(); i++) {
+                // Use i + 1 for 1-based indexing
                 template.addText(
-                        buildTemplateText("BUTTON", examples.get(i), buttonIndex, true, cardIndex, carouselComponent));
+                        buildTemplateText("BUTTON", examples.get(i), i + 1, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} BUTTON variables for card {} button {}", examples.size(), cardIndex, buttonIndex);
+            log.debug("Extracted {} BUTTON variables for card {} button {} with 1-based indexing",
+                    examples.size(), cardIndex, buttonIndex);
         }
     }
 
