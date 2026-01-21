@@ -51,7 +51,7 @@ public class FacebookTemplateSyncMapper {
     public Template fromFacebookTemplate(TemplateRequest fbTemplate, Long userId, String wabaId) {
         // Determine template type based on components
         String templateType = determineTemplateType(fbTemplate.getComponents());
-        
+
         Template template = buildBaseTemplate(fbTemplate, userId, templateType);
 
         if (fbTemplate.getComponents() != null) {
@@ -109,11 +109,19 @@ public class FacebookTemplateSyncMapper {
      * Handles buttons and carousel cards if present.
      */
     private TemplateComponent mapToComponentEntity(TemplateComponentRequest req) {
+        String imageUrl = null;
+
+        if (req.getExample() != null) {
+            if (req.getExample().getHeaderHandle() != null
+                    && !req.getExample().getHeaderHandle().isEmpty()) {
+                imageUrl = req.getExample().getHeaderHandle().get(0);
+            }
+        }
         TemplateComponent comp = TemplateComponent.builder()
                 .type(req.getType() != null ? req.getType().toString() : null)
                 .format(req.getFormat())
                 .text(req.getText())
-                .imageUrl(req.getImageUrl() != null ? req.getImageUrl() : req.getMediaUrl())
+                .imageUrl(imageUrl)
                 .addSecurityRecommendation(req.getAddSecurityRecommendation())
                 .codeExpirationMinutes(req.getCodeExpirationMinutes())
                 .createdAt(LocalDateTime.now())
@@ -199,7 +207,7 @@ public class FacebookTemplateSyncMapper {
 
         if (!allParameters.isEmpty()) {
             card.setParameters(serializeToJson(allParameters));
-        }else{
+        } else {
             card.setParameters("[]");
         }
 
@@ -270,7 +278,8 @@ public class FacebookTemplateSyncMapper {
      * Variables are stored with example values as fallbacks.
      */
     private void extractAllTextVariables(List<TemplateComponentRequest> components, Template template) {
-        if (components == null) return;
+        if (components == null)
+            return;
 
         for (int i = 0; i < components.size(); i++) {
             TemplateComponentRequest componentReq = components.get(i);
@@ -300,7 +309,8 @@ public class FacebookTemplateSyncMapper {
             case HEADER -> extractHeaderTextVariables(example, template, componentEntity);
             case BODY -> extractBodyTextVariables(example, template, componentEntity);
             case BUTTONS -> extractButtonTextVariables(component.getButtons(), template, componentEntity);
-            default -> { /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
+            default -> {
+                /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
         }
     }
 
@@ -312,7 +322,8 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent component) {
 
-        if (example == null || example.getHeaderText() == null) return;
+        if (example == null || example.getHeaderText() == null)
+            return;
 
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
@@ -329,7 +340,8 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent component) {
 
-        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty()) return;
+        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty())
+            return;
 
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
@@ -346,10 +358,12 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent component) {
 
-        if (buttons == null) return;
+        if (buttons == null)
+            return;
 
         for (TemplateComponentButtonRequest btn : buttons) {
-            if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
+            if (btn.getExample() == null || btn.getExample().isEmpty())
+                continue;
 
             int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
             List<String> examples = btn.getExample();
@@ -372,7 +386,8 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent carouselComponent) {
 
-        if (component.getCards() == null) return;
+        if (component.getCards() == null)
+            return;
 
         List<TemplateComponentCardsRequest> cards = component.getCards();
 
@@ -380,7 +395,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponentCardsRequest card = cards.get(i);
             int cardIndex = card.getIndex() != null ? card.getIndex() : i;
 
-            if (card.getComponents() == null) continue;
+            if (card.getComponents() == null)
+                continue;
 
             for (TemplateCarouselCardComponentRequest cardComp : card.getComponents()) {
                 String compType = cardComp.getType().toUpperCase();
@@ -400,13 +416,15 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent carouselComponent) {
 
-        if (cardComp.getExample() == null) return;
+        if (cardComp.getExample() == null)
+            return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
             List<String> headerTexts = example.getHeaderText();
             for (int i = 0; i < headerTexts.size(); i++) {
-                template.addText(buildTemplateText("HEADER", headerTexts.get(i), i, true, cardIndex, carouselComponent));
+                template.addText(
+                        buildTemplateText("HEADER", headerTexts.get(i), i, true, cardIndex, carouselComponent));
             }
             log.debug("Extracted {} HEADER variables for card {}", headerTexts.size(), cardIndex);
         }
@@ -418,7 +436,8 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent carouselComponent) {
 
-        if (cardComp.getExample() == null) return;
+        if (cardComp.getExample() == null)
+            return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
@@ -436,16 +455,19 @@ public class FacebookTemplateSyncMapper {
             Template template,
             TemplateComponent carouselComponent) {
 
-        if (cardComp.getButtons() == null) return;
+        if (cardComp.getButtons() == null)
+            return;
 
         for (TemplateCarouselButtonRequest btn : cardComp.getButtons()) {
-            if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
+            if (btn.getExample() == null || btn.getExample().isEmpty())
+                continue;
 
             int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
             List<String> examples = btn.getExample();
 
             for (int i = 0; i < examples.size(); i++) {
-                template.addText(buildTemplateText("BUTTON", examples.get(i), buttonIndex, true, cardIndex, carouselComponent));
+                template.addText(
+                        buildTemplateText("BUTTON", examples.get(i), buttonIndex, true, cardIndex, carouselComponent));
             }
             log.debug("Extracted {} BUTTON variables for card {} button {}", examples.size(), cardIndex, buttonIndex);
         }
@@ -483,7 +505,8 @@ public class FacebookTemplateSyncMapper {
      * Serializes list to JSON string for storage.
      */
     private String serializeToJson(List<String> list) {
-        if (list == null || list.isEmpty()) return null;
+        if (list == null || list.isEmpty())
+            return null;
 
         try {
             return objectMapper.writeValueAsString(list);
