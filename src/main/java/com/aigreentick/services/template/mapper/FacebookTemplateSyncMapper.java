@@ -154,7 +154,7 @@ public class FacebookTemplateSyncMapper {
                 .url(req.getUrl())
                 .buttonIndex(index)
                 .autofillText(req.getAutofillText())
-                .example(req.getExample())
+                // .example(req.getExample())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();

@@ -451,7 +451,7 @@ public class TemplateMapper {
                 .url(req.getUrl())
                 .buttonIndex(index)
                 .autofillText(req.getAutofillText())
-                .example(req.getExample())
+                // .example(req.getExample())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -597,7 +597,7 @@ public class TemplateMapper {
                 .url(button.getUrl())
                 .index(button.getButtonIndex())
                 .autofillText(button.getAutofillText())
-                .example(button.getExample())
+                // .example(button.getExample())
                 .supportedApps(button.getSupportedApps() != null
                         ? button.getSupportedApps().stream().map(this::mapToSupportedAppDto)
                                 .collect(Collectors.toList())
