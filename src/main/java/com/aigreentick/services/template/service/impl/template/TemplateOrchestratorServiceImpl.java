@@ -16,6 +16,7 @@ import com.aigreentick.services.template.dto.response.common.AccessTokenCredenti
 import com.aigreentick.services.template.dto.response.common.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
 import com.aigreentick.services.template.dto.response.template.TemplateSyncStats;
+import com.aigreentick.services.template.mapper.FacebookTemplateSyncMapper;
 import com.aigreentick.services.template.mapper.TemplateMapper;
 import com.aigreentick.services.template.model.template.Template;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -39,6 +40,7 @@ public class TemplateOrchestratorServiceImpl {
     private final WhatsappClientImpl whatsappClientImpl;
     private final ObjectMapper objectMapper;
     private final UserService userService;
+    private final FacebookTemplateSyncMapper facebookTemplateSyncMapper;
 
 
     public TemplateResponseDto createTemplate(TemplateRequest templateRequest, Long userId) {
@@ -134,7 +136,7 @@ public class TemplateOrchestratorServiceImpl {
         // 8. Prepare entities for insertion
         List<Template> toInsert = facebookTemplates.stream()
                 .filter(dto -> newIds.contains(dto.getMetaTemplateId()))
-                .map(dto -> templateMapper.fromFacebookTemplate(dto, userId, credentials.getWabaId()))
+                .map(dto -> facebookTemplateSyncMapper.fromFacebookTemplate(dto, userId, credentials.getWabaId()))
                 .toList();
 
         // 9. Delete stale templates
