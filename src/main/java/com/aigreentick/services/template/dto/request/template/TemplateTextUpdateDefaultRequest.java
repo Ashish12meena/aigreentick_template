@@ -20,7 +20,6 @@ public class TemplateTextUpdateDefaultRequest {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class TemplateTextDefaultItems {
-
         /**
          * The ID of the TemplateText entity (optional - can use textIndex + type
          * instead)
