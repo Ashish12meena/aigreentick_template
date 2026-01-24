@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.aigreentick.services.template.constants.TemplateConstants;
 import com.aigreentick.services.template.dto.request.template.TemplateRequest;
+import com.aigreentick.services.template.dto.request.template.create.CreateTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.common.ResponseMessage;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
 import com.aigreentick.services.template.dto.response.template.TemplateSyncStats;
@@ -30,7 +31,7 @@ public class TemplateOrchestratorController {
         @PostMapping("/create")
         public ResponseEntity<?> createTemplate(
                         @RequestHeader("X-User-Id") Long userId,
-                        @RequestBody TemplateRequest request) {
+                        @RequestBody CreateTemplateRequestDto request) {
 
                 log.info("Creating template for userId={}", userId);
 

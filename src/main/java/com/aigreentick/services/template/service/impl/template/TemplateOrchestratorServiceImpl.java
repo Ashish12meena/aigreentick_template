@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 import com.aigreentick.services.template.client.adapter.UserService;
 import com.aigreentick.services.template.client.adapter.WhatsappClientImpl;
 import com.aigreentick.services.template.dto.request.template.TemplateRequest;
+import com.aigreentick.services.template.dto.request.template.create.CreateTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.common.AccessTokenCredentials;
 import com.aigreentick.services.template.dto.response.common.FacebookApiResponse;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
@@ -19,13 +20,12 @@ import com.aigreentick.services.template.dto.response.template.TemplateSyncStats
 import com.aigreentick.services.template.mapper.FacebookTemplateSyncMapper;
 import com.aigreentick.services.template.mapper.TemplateMapper;
 import com.aigreentick.services.template.model.template.Template;
+import com.aigreentick.services.template.util.helper.JsonHelper;
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.annotation.JsonInclude.Include;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -42,21 +42,26 @@ public class TemplateOrchestratorServiceImpl {
     private final UserService userService;
     private final FacebookTemplateSyncMapper facebookTemplateSyncMapper;
 
-
-    public TemplateResponseDto createTemplate(TemplateRequest templateRequest, Long userId) {
+    public TemplateResponseDto createTemplate(CreateTemplateRequestDto requestDto, Long userId) {
         log.info("Creating template for userId: {}", userId);
 
-        // TemplateRequest templateRequest = request.getTemplate();
-
+        TemplateRequest templateRequest = requestDto.getTemplate();
+        
         // Check for duplicate
         templateServiceImpl.checkDuplicateTemplate(templateRequest.getName(), userId);
 
+        String payload = JsonHelper.serialize(requestDto);
+
+        Template template =   templateMapper.maptoTemplateEntity(payload);
+
+        templateServiceImpl.save(template);
+        
         // Fetch WABA credentials
         AccessTokenCredentials credentials = userService.getWabaAccessToken(userId);
 
         // Serialize template request
-        String jsonRequest = serializeTemplate(templateRequest);
-
+        String jsonRequest = JsonHelper.serializeWithSnakeCase(templateRequest);
+        
         // Call WhatsApp API
         FacebookApiResponse<JsonNode> fbResponse = whatsappClientImpl.createTemplate(
                 jsonRequest, credentials.getWabaId(), credentials.getAccessToken());
@@ -80,7 +85,6 @@ public class TemplateOrchestratorServiceImpl {
         if (templateId == null || status == null) {
             return new TemplateResponseDto("Invalid response from Facebook API", jsonData);
         }
-
 
         return templateMapper.mapToTemplateResponse(templateId,status,category);
     }
@@ -178,27 +182,4 @@ public class TemplateOrchestratorServiceImpl {
         }
     }
 
-    // private String serializeToString(JsonNode jsonData) {
-    //     try {
-    //         return objectMapper.copy()
-    //                 .setSerializationInclusion(Include.NON_NULL)
-    //                 .writeValueAsString(jsonData);
-    //     } catch (Exception e) {
-    //         log.error("Failed to serialize JsonNode to string", e);
-    //         throw new IllegalStateException("JSON serialization failed", e);
-    //     }
-    // }
-
-    private String serializeTemplate(TemplateRequest request) {
-        try {
-            ObjectMapper mapper = new ObjectMapper()
-                    .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
-                    .setSerializationInclusion(Include.NON_NULL);
-
-            return mapper.writeValueAsString(request);
-        } catch (Exception e) {
-            log.error("Failed to serialize template request", e);
-            throw new IllegalStateException("JSON serialization failed", e);
-        }
-    }
 }

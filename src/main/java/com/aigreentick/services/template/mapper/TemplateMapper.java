@@ -773,4 +773,11 @@ public class TemplateMapper {
             count++;
         return count;
     }
+
+    public Template maptoTemplateEntity(String payload) {
+        return Template.builder()
+                .status("new_created")
+                .payload(payload)
+                .build();
+    }
 }
