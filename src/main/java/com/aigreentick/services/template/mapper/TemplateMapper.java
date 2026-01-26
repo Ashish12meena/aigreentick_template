@@ -31,6 +31,7 @@ import com.aigreentick.services.template.dto.request.template.TemplateComponentR
 import com.aigreentick.services.template.dto.request.template.TemplateExampleRequest;
 import com.aigreentick.services.template.dto.request.template.TemplateRequest;
 import com.aigreentick.services.template.dto.request.template.TemplateTextRequest;
+import com.aigreentick.services.template.dto.request.template.create.CreateTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
 import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.enums.MediaFormat;
@@ -774,10 +775,14 @@ public class TemplateMapper {
         return count;
     }
 
-    public Template maptoTemplateEntity(String payload) {
+    public Template maptoTemplateEntity(String payload,Long userId,CreateTemplateRequestDto requestDto) {
         return Template.builder()
-                .status("new_created")
-                .payload(payload)
-                .build();
+            .userId(userId)
+            .name(requestDto.getTemplate().getName())
+            .language(requestDto.getTemplate().getLanguage())
+            .category(requestDto.getTemplate().getCategory())
+            .status("new_created")
+            .payload(payload)
+            .build();
     }
 }

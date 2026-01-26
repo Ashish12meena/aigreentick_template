@@ -2,7 +2,11 @@ package com.aigreentick.services.template.service.impl.template;
 
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
@@ -31,6 +35,8 @@ public class TemplateServiceImpl {
 
     @Value("${template.default-page-size:10}")
     private int defaultPageSize;
+
+    public static final String STATUS_NEW_CREATED = "new_created";
 
     @Transactional
     public Template save(Template template) {
@@ -107,6 +113,89 @@ public class TemplateServiceImpl {
                             String.format(TemplateConstants.Messages.TEMPLATE_NOT_FOUND, id));
                 });
     }
+
+    // ============== NEW METHODS FOR SYNC OPTIMIZATION ==============
+
+    /**
+     * Find all templates with status 'new_created' for a user
+     */
+    public List<Template> findNewCreatedTemplates(Long userId) {
+        log.debug("Fetching new_created templates for userId: {}", userId);
+        return templateRepository.findByUserIdAndStatusAndDeletedAtIsNull(userId, STATUS_NEW_CREATED);
+    }
+
+    /**
+     * Find new_created templates by names for matching with Facebook approved templates
+     * Returns a Map of templateName -> Template for quick lookup
+     */
+    public Map<String, Template> findNewCreatedTemplatesByNames(Long userId, Set<String> names) {
+        log.debug("Fetching new_created templates by names for userId: {}, names count: {}", userId, names.size());
+        
+        List<Template> templates = templateRepository.findByUserIdAndStatusAndNameIn(
+                userId, STATUS_NEW_CREATED, names);
+        
+        return templates.stream()
+                .collect(Collectors.toMap(
+                        Template::getName,
+                        Function.identity(),
+                        (existing, replacement) -> existing // Keep first if duplicates
+                ));
+    }
+
+    /**
+     * Find template by name and status
+     */
+    public Optional<Template> findByNameAndStatus(Long userId, String name, String status) {
+        log.debug("Fetching template by name: {} and status: {} for userId: {}", name, status, userId);
+        return templateRepository.findByUserIdAndNameAndStatusAndDeletedAtIsNull(userId, name, status);
+    }
+
+    /**
+     * Get all template names with status 'new_created' for a user
+     */
+    public Set<String> findNewCreatedTemplateNames(Long userId) {
+        log.debug("Fetching new_created template names for userId: {}", userId);
+        return templateRepository.findNamesByUserIdAndStatus(userId, STATUS_NEW_CREATED);
+    }
+
+    /**
+     * Update template with components and texts from Facebook sync
+     * This is used when a new_created template gets approved on Facebook
+     */
+    @Transactional
+    public Template updateTemplateFromFacebookSync(Template existingTemplate, Template syncedData) {
+        log.info("Updating template {} from Facebook sync", existingTemplate.getName());
+
+        // Update basic fields from Facebook
+        existingTemplate.setWaId(syncedData.getWaId());
+        existingTemplate.setStatus(syncedData.getStatus());
+        existingTemplate.setCategory(syncedData.getCategory());
+        existingTemplate.setPreviousCategory(syncedData.getPreviousCategory());
+        existingTemplate.setTemplateType(syncedData.getTemplateType());
+        existingTemplate.setUpdatedAt(LocalDateTime.now());
+
+        // Clear existing components and texts (they will be replaced)
+        existingTemplate.getComponents().clear();
+        existingTemplate.getTexts().clear();
+
+        // Add new components
+        if (syncedData.getComponents() != null) {
+            for (var component : syncedData.getComponents()) {
+                existingTemplate.addComponent(component);
+            }
+        }
+
+        // Add new texts
+        if (syncedData.getTexts() != null) {
+            for (var text : syncedData.getTexts()) {
+                existingTemplate.addText(text);
+            }
+        }
+
+        return templateRepository.save(existingTemplate);
+    }
+
+    // ============== EXISTING METHODS ==============
 
     /**
      * Retrieves paginated templates for a given user with optional filtering.

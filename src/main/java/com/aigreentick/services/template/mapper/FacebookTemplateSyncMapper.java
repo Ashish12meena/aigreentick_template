@@ -2,7 +2,9 @@ package com.aigreentick.services.template.mapper;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -17,6 +19,10 @@ import com.aigreentick.services.template.dto.request.template.TemplateComponentC
 import com.aigreentick.services.template.dto.request.template.TemplateComponentRequest;
 import com.aigreentick.services.template.dto.request.template.TemplateExampleRequest;
 import com.aigreentick.services.template.dto.request.template.TemplateRequest;
+import com.aigreentick.services.template.dto.request.template.create.VariableDefaultButtonDto;
+import com.aigreentick.services.template.dto.request.template.create.VariableDefaultCardDto;
+import com.aigreentick.services.template.dto.request.template.create.VariableDefaultComponentDto;
+import com.aigreentick.services.template.dto.request.template.create.VariableDefaultsDto;
 import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.model.template.SupportedApp;
 import com.aigreentick.services.template.model.template.Template;
@@ -34,6 +40,15 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * Converts Facebook WhatsApp API template responses to local entities.
  * Used during template sync from WhatsApp Business API.
+ * 
+ * Supports two modes:
+ * 1. With VariableDefaultsDto - for templates that were created locally (new_created)
+ *    - text = attribute name from VariableDefaultsDto
+ *    - defaultValue = example value from Facebook
+ * 
+ * 2. Without VariableDefaultsDto - for templates created directly on Facebook
+ *    - text = null
+ *    - defaultValue = example value from Facebook
  */
 @Component
 @RequiredArgsConstructor
@@ -45,14 +60,41 @@ public class FacebookTemplateSyncMapper {
     // ==================== PUBLIC API ====================
 
     /**
-     * Main method to convert Facebook template response to Template entity.
-     * Creates components and extracts text variables with example values.
+     * Case 2: Template NOT found in DB - no attribute mapping available
+     * - text = null
+     * - defaultValue = example value from Facebook
      */
     public Template fromFacebookTemplate(TemplateRequest fbTemplate, Long userId, String wabaId) {
+        return fromFacebookTemplateWithDefaults(fbTemplate, userId, wabaId, null);
+    }
+
+    /**
+     * Case 1: Template found in DB with new_created status - has attribute mapping
+     * - text = attribute name from VariableDefaultsDto
+     * - defaultValue = example value from Facebook
+     * 
+     * @param fbTemplate Facebook template response
+     * @param userId User ID
+     * @param wabaId WABA ID
+     * @param variableDefaults Optional attribute mappings from original request payload
+     */
+    public Template fromFacebookTemplateWithDefaults(
+            TemplateRequest fbTemplate, 
+            Long userId, 
+            String wabaId,
+            VariableDefaultsDto variableDefaults) {
+        
+        log.debug("Mapping Facebook template: {} with variableDefaults: {}", 
+                fbTemplate.getName(), variableDefaults != null ? "present" : "absent");
+
         // Determine template type based on components
         String templateType = determineTemplateType(fbTemplate.getComponents());
 
         Template template = buildBaseTemplate(fbTemplate, userId, templateType);
+
+        // Build attribute lookup map from VariableDefaultsDto
+        Map<String, String> attributeMap = buildAttributeLookupMap(variableDefaults);
+        log.debug("Built attribute map with {} entries", attributeMap.size());
 
         if (fbTemplate.getComponents() != null) {
             // Map all components first
@@ -60,12 +102,126 @@ public class FacebookTemplateSyncMapper {
                 template.addComponent(mapToComponentEntity(compReq));
             }
 
-            // Extract text variables from components
-            extractAllTextVariables(fbTemplate.getComponents(), template);
+            // Extract text variables from components with attribute mapping
+            extractAllTextVariablesWithAttributes(fbTemplate.getComponents(), template, attributeMap);
         }
 
         return template;
     }
+
+    // ==================== ATTRIBUTE LOOKUP MAP BUILDING ====================
+
+    /**
+     * Builds a lookup map from VariableDefaultsDto for quick attribute resolution.
+     * Key format: TYPE_textIndex_cardIndex (cardIndex is -1 for non-carousel)
+     * Value: attribute name
+     */
+    private Map<String, String> buildAttributeLookupMap(VariableDefaultsDto variableDefaults) {
+        Map<String, String> attributeMap = new HashMap<>();
+        
+        if (variableDefaults == null || variableDefaults.getComponents() == null) {
+            return attributeMap;
+        }
+
+        for (VariableDefaultComponentDto compDto : variableDefaults.getComponents()) {
+            String type = compDto.getType();
+            
+            if (type == null) continue;
+
+            switch (type.toUpperCase()) {
+                case "HEADER", "BODY" -> {
+                    if (compDto.getAttributes() != null) {
+                        for (int i = 0; i < compDto.getAttributes().size(); i++) {
+                            String attr = compDto.getAttributes().get(i);
+                            // Use 1-based indexing to match template text extraction
+                            String key = buildCompositeKey(type.toUpperCase(), i + 1, -1);
+                            attributeMap.put(key, attr);
+                            log.debug("Added attribute mapping: {} -> {}", key, attr);
+                        }
+                    }
+                }
+                case "BUTTONS" -> {
+                    if (compDto.getButtons() != null) {
+                        for (int btnIdx = 0; btnIdx < compDto.getButtons().size(); btnIdx++) {
+                            VariableDefaultButtonDto btnDto = compDto.getButtons().get(btnIdx);
+                            if (btnDto.getAttributes() != null) {
+                                for (int i = 0; i < btnDto.getAttributes().size(); i++) {
+                                    String attr = btnDto.getAttributes().get(i);
+                                    // Button variables use 1-based indexing
+                                    String key = buildCompositeKey("BUTTON", i + 1, -1);
+                                    attributeMap.put(key, attr);
+                                    log.debug("Added button attribute mapping: {} -> {}", key, attr);
+                                }
+                            }
+                        }
+                    }
+                }
+                case "CAROUSEL" -> {
+                    if (compDto.getCards() != null) {
+                        for (int cardIdx = 0; cardIdx < compDto.getCards().size(); cardIdx++) {
+                            VariableDefaultCardDto cardDto = compDto.getCards().get(cardIdx);
+                            if (cardDto.getComponents() != null) {
+                                addCarouselCardAttributesToMap(cardDto.getComponents(), cardIdx, attributeMap);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return attributeMap;
+    }
+
+    /**
+     * Add carousel card component attributes to the lookup map
+     */
+    private void addCarouselCardAttributesToMap(
+            List<VariableDefaultComponentDto> cardComponents,
+            int cardIndex,
+            Map<String, String> attributeMap) {
+        
+        for (VariableDefaultComponentDto compDto : cardComponents) {
+            String type = compDto.getType();
+            if (type == null) continue;
+
+            switch (type.toUpperCase()) {
+                case "HEADER", "BODY" -> {
+                    if (compDto.getAttributes() != null) {
+                        for (int i = 0; i < compDto.getAttributes().size(); i++) {
+                            String attr = compDto.getAttributes().get(i);
+                            String key = buildCompositeKey(type.toUpperCase(), i + 1, cardIndex);
+                            attributeMap.put(key, attr);
+                            log.debug("Added carousel {} attribute mapping: {} -> {}", type, key, attr);
+                        }
+                    }
+                }
+                case "BUTTONS" -> {
+                    if (compDto.getButtons() != null) {
+                        for (int btnIdx = 0; btnIdx < compDto.getButtons().size(); btnIdx++) {
+                            VariableDefaultButtonDto btnDto = compDto.getButtons().get(btnIdx);
+                            if (btnDto.getAttributes() != null) {
+                                for (int i = 0; i < btnDto.getAttributes().size(); i++) {
+                                    String attr = btnDto.getAttributes().get(i);
+                                    String key = buildCompositeKey("BUTTON", i + 1, cardIndex);
+                                    attributeMap.put(key, attr);
+                                    log.debug("Added carousel button attribute mapping: {} -> {}", key, attr);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Build composite key for attribute lookup
+     */
+    private String buildCompositeKey(String type, int textIndex, int cardIndex) {
+        return String.format("%s_%d_%d", type.toUpperCase(), textIndex, cardIndex);
+    }
+
+    // ==================== TEMPLATE BUILDING ====================
 
     /**
      * Determines template type based on components.
@@ -81,8 +237,6 @@ public class FacebookTemplateSyncMapper {
 
         return hasCarousel ? "carousel" : "standard";
     }
-
-    // ==================== TEMPLATE BUILDING ====================
 
     /**
      * Creates base Template entity with metadata from Facebook response.
@@ -162,7 +316,6 @@ public class FacebookTemplateSyncMapper {
                 .url(req.getUrl())
                 .buttonIndex(index)
                 .autofillText(req.getAutofillText())
-                // .example(req.getExample())
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -271,15 +424,25 @@ public class FacebookTemplateSyncMapper {
                 .build();
     }
 
-    // ==================== TEXT VARIABLE EXTRACTION ====================
+    // ==================== TEXT VARIABLE EXTRACTION WITH ATTRIBUTES ====================
 
     /**
-     * Extracts all text variables from components.
-     * Variables are stored with example values as fallbacks.
+     * Extracts all text variables from components with attribute mapping support.
+     * 
+     * If attributeMap has a value for the composite key:
+     *   - text = attribute name (from attributeMap)
+     *   - defaultValue = example value (from Facebook)
+     * 
+     * If attributeMap does NOT have a value:
+     *   - text = null
+     *   - defaultValue = example value (from Facebook)
      */
-    private void extractAllTextVariables(List<TemplateComponentRequest> components, Template template) {
-        if (components == null)
-            return;
+    private void extractAllTextVariablesWithAttributes(
+            List<TemplateComponentRequest> components, 
+            Template template,
+            Map<String, String> attributeMap) {
+        
+        if (components == null) return;
 
         for (int i = 0; i < components.size(); i++) {
             TemplateComponentRequest componentReq = components.get(i);
@@ -287,111 +450,121 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent componentEntity = template.getComponents().get(i);
 
             if (type == ComponentType.CAROUSEL) {
-                extractCarouselTextVariables(componentReq, template, componentEntity);
+                extractCarouselTextVariablesWithAttributes(componentReq, template, componentEntity, attributeMap);
             } else {
-                extractRegularTextVariables(componentReq, template, componentEntity);
+                extractRegularTextVariablesWithAttributes(componentReq, template, componentEntity, attributeMap);
             }
         }
     }
 
     /**
-     * Extracts variables from non-carousel components (HEADER, BODY, BUTTONS).
+     * Extracts variables from non-carousel components (HEADER, BODY, BUTTONS) with attribute mapping.
      */
-    private void extractRegularTextVariables(
+    private void extractRegularTextVariablesWithAttributes(
             TemplateComponentRequest component,
             Template template,
-            TemplateComponent componentEntity) {
+            TemplateComponent componentEntity,
+            Map<String, String> attributeMap) {
 
         ComponentType type = component.getType();
         TemplateExampleRequest example = component.getExample();
 
         switch (type) {
-            case HEADER -> extractHeaderTextVariables(example, template, componentEntity);
-            case BODY -> extractBodyTextVariables(example, template, componentEntity);
-            case BUTTONS -> extractButtonTextVariables(component.getButtons(), template, componentEntity);
-            default -> {
-                /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
+            case HEADER -> extractHeaderTextVariablesWithAttributes(example, template, componentEntity, attributeMap);
+            case BODY -> extractBodyTextVariablesWithAttributes(example, template, componentEntity, attributeMap);
+            case BUTTONS -> extractButtonTextVariablesWithAttributes(component.getButtons(), template, componentEntity, attributeMap);
+            default -> { /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
         }
     }
 
     /**
-     * Extracts HEADER text variables from example values.
+     * Extracts HEADER text variables with attribute mapping.
      */
-    private void extractHeaderTextVariables(
+    private void extractHeaderTextVariablesWithAttributes(
             TemplateExampleRequest example,
             Template template,
-            TemplateComponent component) {
+            TemplateComponent component,
+            Map<String, String> attributeMap) {
 
-        if (example == null || example.getHeaderText() == null)
-            return;
+        if (example == null || example.getHeaderText() == null) return;
 
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
-            // Use i + 1 for 1-based indexing
-            template.addText(buildTemplateText("HEADER", headerTexts.get(i), i + 1, false, null, component));
+            int textIndex = i + 1; // 1-based indexing
+            String exampleValue = headerTexts.get(i);
+            String compositeKey = buildCompositeKey("HEADER", textIndex, -1);
+            String attributeName = attributeMap.get(compositeKey);
+
+            template.addText(buildTemplateTextWithAttribute(
+                    "HEADER", attributeName, exampleValue, textIndex, false, null, component));
         }
-        log.debug("Extracted {} HEADER variables with 1-based indexing", headerTexts.size());
+        log.debug("Extracted {} HEADER variables with attribute mapping", headerTexts.size());
     }
 
     /**
-     * Extracts BODY text variables from example values.
+     * Extracts BODY text variables with attribute mapping.
      */
-    private void extractBodyTextVariables(
+    private void extractBodyTextVariablesWithAttributes(
             TemplateExampleRequest example,
             Template template,
-            TemplateComponent component) {
+            TemplateComponent component,
+            Map<String, String> attributeMap) {
 
-        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty())
-            return;
+        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty()) return;
 
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
-            // Use i + 1 for 1-based indexing
-            template.addText(buildTemplateText("BODY", bodyTexts.get(i), i + 1, false, null, component));
+            int textIndex = i + 1; // 1-based indexing
+            String exampleValue = bodyTexts.get(i);
+            String compositeKey = buildCompositeKey("BODY", textIndex, -1);
+            String attributeName = attributeMap.get(compositeKey);
+
+            template.addText(buildTemplateTextWithAttribute(
+                    "BODY", attributeName, exampleValue, textIndex, false, null, component));
         }
-        log.debug("Extracted {} BODY variables with 1-based indexing", bodyTexts.size());
+        log.debug("Extracted {} BODY variables with attribute mapping", bodyTexts.size());
     }
 
     /**
-     * Extracts BUTTON text variables (for URL buttons with dynamic suffix).
+     * Extracts BUTTON text variables with attribute mapping.
      */
-    private void extractButtonTextVariables(
+    private void extractButtonTextVariablesWithAttributes(
             List<TemplateComponentButtonRequest> buttons,
             Template template,
-            TemplateComponent component) {
+            TemplateComponent component,
+            Map<String, String> attributeMap) {
 
-        if (buttons == null)
-            return;
+        if (buttons == null) return;
 
         for (TemplateComponentButtonRequest btn : buttons) {
-            if (btn.getExample() == null || btn.getExample().isEmpty())
-                continue;
+            if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
 
-            int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
             List<String> examples = btn.getExample();
-
             for (int i = 0; i < examples.size(); i++) {
-                // Use i + 1 for 1-based indexing
-                template.addText(buildTemplateText("BUTTON", examples.get(i), i + 1, false, null, component));
+                int textIndex = i + 1; // 1-based indexing
+                String exampleValue = examples.get(i);
+                String compositeKey = buildCompositeKey("BUTTON", textIndex, -1);
+                String attributeName = attributeMap.get(compositeKey);
+
+                template.addText(buildTemplateTextWithAttribute(
+                        "BUTTON", attributeName, exampleValue, textIndex, false, null, component));
             }
-            log.debug("Extracted {} BUTTON variables for button {} with 1-based indexing",
-                    examples.size(), buttonIndex);
+            log.debug("Extracted {} BUTTON variables with attribute mapping", examples.size());
         }
     }
 
-    // ==================== CAROUSEL TEXT EXTRACTION ====================
+    // ==================== CAROUSEL TEXT EXTRACTION WITH ATTRIBUTES ====================
 
     /**
-     * Extracts text variables from carousel cards.
-     * Each variable includes cardIndex for card-specific resolution.
+     * Extracts text variables from carousel cards with attribute mapping.
      */
-    private void extractCarouselTextVariables(
+    private void extractCarouselTextVariablesWithAttributes(
             TemplateComponentRequest component,
             Template template,
-            TemplateComponent carouselComponent) {
+            TemplateComponent carouselComponent,
+            Map<String, String> attributeMap) {
 
-        if (component.getCards() == null)
-            return;
+        if (component.getCards() == null) return;
 
         List<TemplateComponentCardsRequest> cards = component.getCards();
 
@@ -399,100 +572,118 @@ public class FacebookTemplateSyncMapper {
             TemplateComponentCardsRequest card = cards.get(i);
             int cardIndex = card.getIndex() != null ? card.getIndex() : i;
 
-            if (card.getComponents() == null)
-                continue;
+            if (card.getComponents() == null) continue;
 
             for (TemplateCarouselCardComponentRequest cardComp : card.getComponents()) {
                 String compType = cardComp.getType().toUpperCase();
 
                 switch (compType) {
-                    case "HEADER" -> extractCarouselHeaderTexts(cardComp, cardIndex, template, carouselComponent);
-                    case "BODY" -> extractCarouselBodyTexts(cardComp, cardIndex, template, carouselComponent);
-                    case "BUTTONS" -> extractCarouselButtonTexts(cardComp, cardIndex, template, carouselComponent);
+                    case "HEADER" -> extractCarouselHeaderTextsWithAttributes(
+                            cardComp, cardIndex, template, carouselComponent, attributeMap);
+                    case "BODY" -> extractCarouselBodyTextsWithAttributes(
+                            cardComp, cardIndex, template, carouselComponent, attributeMap);
+                    case "BUTTONS" -> extractCarouselButtonTextsWithAttributes(
+                            cardComp, cardIndex, template, carouselComponent, attributeMap);
                 }
             }
         }
     }
 
-    private void extractCarouselHeaderTexts(
+    private void extractCarouselHeaderTextsWithAttributes(
             TemplateCarouselCardComponentRequest cardComp,
             int cardIndex,
             Template template,
-            TemplateComponent carouselComponent) {
+            TemplateComponent carouselComponent,
+            Map<String, String> attributeMap) {
 
-        if (cardComp.getExample() == null)
-            return;
+        if (cardComp.getExample() == null) return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
             List<String> headerTexts = example.getHeaderText();
             for (int i = 0; i < headerTexts.size(); i++) {
-                // Use i + 1 for 1-based indexing
-                template.addText(
-                        buildTemplateText("HEADER", headerTexts.get(i), i + 1, true, cardIndex, carouselComponent));
+                int textIndex = i + 1;
+                String exampleValue = headerTexts.get(i);
+                String compositeKey = buildCompositeKey("HEADER", textIndex, cardIndex);
+                String attributeName = attributeMap.get(compositeKey);
+
+                template.addText(buildTemplateTextWithAttribute(
+                        "HEADER", attributeName, exampleValue, textIndex, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} HEADER variables for card {} with 1-based indexing",
+            log.debug("Extracted {} HEADER variables for card {} with attribute mapping", 
                     headerTexts.size(), cardIndex);
         }
     }
 
-    private void extractCarouselBodyTexts(
+    private void extractCarouselBodyTextsWithAttributes(
             TemplateCarouselCardComponentRequest cardComp,
             int cardIndex,
             Template template,
-            TemplateComponent carouselComponent) {
+            TemplateComponent carouselComponent,
+            Map<String, String> attributeMap) {
 
-        if (cardComp.getExample() == null)
-            return;
+        if (cardComp.getExample() == null) return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
             List<String> bodyTexts = example.getBodyText().get(0);
             for (int i = 0; i < bodyTexts.size(); i++) {
-                // Use i + 1 for 1-based indexing
-                template.addText(
-                        buildTemplateText("BODY", bodyTexts.get(i), i + 1, true, cardIndex, carouselComponent));
+                int textIndex = i + 1;
+                String exampleValue = bodyTexts.get(i);
+                String compositeKey = buildCompositeKey("BODY", textIndex, cardIndex);
+                String attributeName = attributeMap.get(compositeKey);
+
+                template.addText(buildTemplateTextWithAttribute(
+                        "BODY", attributeName, exampleValue, textIndex, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} BODY variables for card {} with 1-based indexing",
+            log.debug("Extracted {} BODY variables for card {} with attribute mapping", 
                     bodyTexts.size(), cardIndex);
         }
     }
 
-    private void extractCarouselButtonTexts(
+    private void extractCarouselButtonTextsWithAttributes(
             TemplateCarouselCardComponentRequest cardComp,
             int cardIndex,
             Template template,
-            TemplateComponent carouselComponent) {
+            TemplateComponent carouselComponent,
+            Map<String, String> attributeMap) {
 
-        if (cardComp.getButtons() == null)
-            return;
+        if (cardComp.getButtons() == null) return;
 
         for (TemplateCarouselButtonRequest btn : cardComp.getButtons()) {
-            if (btn.getExample() == null || btn.getExample().isEmpty())
-                continue;
+            if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
 
-            int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
             List<String> examples = btn.getExample();
-
             for (int i = 0; i < examples.size(); i++) {
-                // Use i + 1 for 1-based indexing
-                template.addText(
-                        buildTemplateText("BUTTON", examples.get(i), i + 1, true, cardIndex, carouselComponent));
+                int textIndex = i + 1;
+                String exampleValue = examples.get(i);
+                String compositeKey = buildCompositeKey("BUTTON", textIndex, cardIndex);
+                String attributeName = attributeMap.get(compositeKey);
+
+                template.addText(buildTemplateTextWithAttribute(
+                        "BUTTON", attributeName, exampleValue, textIndex, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} BUTTON variables for card {} button {} with 1-based indexing",
-                    examples.size(), cardIndex, buttonIndex);
+            log.debug("Extracted {} BUTTON variables for card {} with attribute mapping", 
+                    examples.size(), cardIndex);
         }
     }
 
     // ==================== HELPER METHODS ====================
 
     /**
-     * Creates TemplateText entity for storing variable info.
-     * - text: stores example value from Facebook (used as fallback)
-     * - defaultValue: null initially (user configures later)
+     * Creates TemplateText entity with attribute mapping support.
+     * 
+     * @param type Component type (HEADER, BODY, BUTTON)
+     * @param attributeName Attribute name from VariableDefaultsDto (can be null)
+     * @param exampleValue Example value from Facebook
+     * @param textIndex 1-based index
+     * @param isCarousel Whether this is a carousel variable
+     * @param cardIndex Card index for carousel (null for non-carousel)
+     * @param component Parent component
      */
-    private TemplateText buildTemplateText(
+    private TemplateText buildTemplateTextWithAttribute(
             String type,
+            String attributeName,
             String exampleValue,
             int textIndex,
             boolean isCarousel,
@@ -501,11 +692,11 @@ public class FacebookTemplateSyncMapper {
 
         return TemplateText.builder()
                 .type(type)
-                .text(exampleValue)
+                .text(attributeName)           // attribute name (null if not available)
+                .defaultValue(exampleValue)    // example value from Facebook
                 .textIndex(textIndex)
                 .isCarousel(isCarousel)
                 .cardIndex(cardIndex)
-                .defaultValue(null)
                 .component(component)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
@@ -516,8 +707,7 @@ public class FacebookTemplateSyncMapper {
      * Serializes list to JSON string for storage.
      */
     private String serializeToJson(List<String> list) {
-        if (list == null || list.isEmpty())
-            return null;
+        if (list == null || list.isEmpty()) return null;
 
         try {
             return objectMapper.writeValueAsString(list);
