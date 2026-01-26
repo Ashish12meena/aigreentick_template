@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.service.impl.template;
+package com.aigreentick.services.template.service.impl.template.builder;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -65,7 +65,8 @@ public class TemplateBuilderForCsvServiceImpl {
         Map<Integer, CardParameters> carousel = parseCarouselParams(csvRequest.getCarouselCards());
 
         List<String> attrKeys = extractAttributeKeys(template);
-        Map<String, Map<String, String>> contactAttrs = chatContactService.getContactAttributes(userId, phoneNumbers, attrKeys);
+        Map<String, Map<String, String>> contactAttrs = chatContactService.getContactAttributes(userId, phoneNumbers,
+                attrKeys);
 
         return CsvParameterContext.builder()
                 .fallbackValues(fallbacks)
@@ -79,28 +80,32 @@ public class TemplateBuilderForCsvServiceImpl {
     /**
      * Parse CSV variables with REINDEXING.
      * 
-     * Key Feature: Ignores the incoming "variable" keys and reindexes based on array position.
+     * Key Feature: Ignores the incoming "variable" keys and reindexes based on
+     * array position.
      * 
      * Example transformations:
      * - Input: [{"variable": 0, "value": "John"}, {"variable": 1, "value": "Doe"}]
-     *   Output: {1: "John", 2: "Doe"}
+     * Output: {1: "John", 2: "Doe"}
      * 
-     * - Input: [{"variable": 5, "value": "Alice"}, {"variable": 10, "value": "Smith"}]
-     *   Output: {1: "Alice", 2: "Smith"}
+     * - Input: [{"variable": 5, "value": "Alice"}, {"variable": 10, "value":
+     * "Smith"}]
+     * Output: {1: "Alice", 2: "Smith"}
      * 
-     * This ensures WhatsApp template variables {{1}}, {{2}}, etc. are always correctly mapped
+     * This ensures WhatsApp template variables {{1}}, {{2}}, etc. are always
+     * correctly mapped
      * regardless of how the frontend/CSV sends the keys.
      */
     private void parseCsvVariables(List<VariableGroupDto> variables,
             Map<String, Map<Integer, String>> perContact, Map<Integer, String> global) {
-        if (variables == null) return;
+        if (variables == null)
+            return;
 
         for (VariableGroupDto group : variables) {
             Map<Integer, String> varMap = new HashMap<>();
-            
+
             if (group.getVariable() != null) {
                 List<VariableDto> sortedVars = new ArrayList<>(group.getVariable());
-                
+
                 // CRITICAL CHANGE: Reindex based on array position (1-based)
                 for (int i = 0; i < sortedVars.size(); i++) {
                     VariableDto v = sortedVars.get(i);
@@ -108,13 +113,13 @@ public class TemplateBuilderForCsvServiceImpl {
                         // Use array position + 1 as the key (1-based indexing for WhatsApp)
                         int reindexedKey = i + 1;
                         varMap.put(reindexedKey, v.getValue());
-                        
-                        log.debug("Reindexed variable: original key={}, new key={}, value={}", 
+
+                        log.debug("Reindexed variable: original key={}, new key={}, value={}",
                                 v.getVariable(), reindexedKey, v.getValue());
                     }
                 }
             }
-            
+
             if (group.getMobile() != null) {
                 perContact.put(String.valueOf(group.getMobile()), varMap);
             } else {
@@ -125,10 +130,12 @@ public class TemplateBuilderForCsvServiceImpl {
 
     private Map<Integer, CardParameters> parseCarouselParams(List<CarouselCardDto> cards) {
         Map<Integer, CardParameters> result = new HashMap<>();
-        if (cards == null) return result;
+        if (cards == null)
+            return result;
 
         for (CarouselCardDto card : cards) {
-            if (card.getCardIndex() == null) continue;
+            if (card.getCardIndex() == null)
+                continue;
 
             result.put(card.getCardIndex(), CardParameters.builder()
                     .bodyVariables(parseStringKeysWithReindexing(card.getVariables()))
@@ -141,7 +148,8 @@ public class TemplateBuilderForCsvServiceImpl {
 
     private Map<Integer, Map<Integer, String>> parseButtonVars(List<CarouselButtonDto> buttons) {
         Map<Integer, Map<Integer, String>> result = new HashMap<>();
-        if (buttons == null) return result;
+        if (buttons == null)
+            return result;
 
         for (int i = 0; i < buttons.size(); i++) {
             if (buttons.get(i).getVariables() != null) {
@@ -164,12 +172,13 @@ public class TemplateBuilderForCsvServiceImpl {
      */
     private Map<Integer, String> parseStringKeysWithReindexing(Map<String, String> input) {
         Map<Integer, String> result = new HashMap<>();
-        if (input == null || input.isEmpty()) return result;
+        if (input == null || input.isEmpty())
+            return result;
 
         try {
             // Convert to list of entries with numeric keys
             List<Map.Entry<Integer, String>> entries = new ArrayList<>();
-            
+
             for (Map.Entry<String, String> entry : input.entrySet()) {
                 try {
                     int key = Integer.parseInt(entry.getKey());
@@ -178,22 +187,22 @@ public class TemplateBuilderForCsvServiceImpl {
                     log.warn("Skipping non-numeric key in carousel variables: {}", entry.getKey());
                 }
             }
-            
+
             // Sort by original key (just for consistency, not strictly required)
             entries.sort(Map.Entry.comparingByKey());
-            
+
             // Reindex starting from 1
             for (int i = 0; i < entries.size(); i++) {
                 result.put(i + 1, entries.get(i).getValue());
-                
-                log.debug("Carousel variable reindex: original key={}, new key={}, value={}", 
+
+                log.debug("Carousel variable reindex: original key={}, new key={}, value={}",
                         entries.get(i).getKey(), i + 1, entries.get(i).getValue());
             }
-            
+
         } catch (Exception e) {
             log.error("Error parsing carousel variables with reindexing", e);
         }
-        
+
         return result;
     }
 
@@ -207,25 +216,56 @@ public class TemplateBuilderForCsvServiceImpl {
         return parseStringKeysWithReindexing(input);
     }
 
+    /**
+     * Build fallback values map with NEW field mapping.
+     * Value: defaultValue (example value from Facebook)
+     * 
+     * Note: `text` field is now attribute key, not stored in fallbacks
+     */
     private Map<String, String> buildFallbackValues(TemplateDto template) {
         Map<String, String> fallbacks = new HashMap<>();
-        if (template.getTexts() == null) return fallbacks;
+
+        // Guard
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return fallbacks;
+        }
 
         for (TemplateTextDto t : template.getTexts()) {
             String key = compositeKey(t.getType(), t.getTextIndex(), t.getCardIndex(), t.getIsCarousel());
+
+            // NEW: defaultValue is the example value from Facebook (primary fallback)
+            // text field stores attribute name (not stored in fallbacks)
             String val = t.getDefaultValue();
-            if (val == null || val.isBlank()) val = t.getText();
-            fallbacks.put(key, val != null ? val : "");
+
+            // If defaultValue is null/blank, use empty string
+            if (val == null || val.isBlank()) {
+                val = "";
+            }
+
+            fallbacks.put(key, val);
+            log.debug("Fallback for {}: {}", key, val);
         }
+
         return fallbacks;
     }
 
+    /**
+     * Extract attribute keys from `text` field (NEW mapping).
+     * 
+     * OLD: defaultValue stored attribute keys
+     * NEW: text field stores attribute keys
+     */
     private List<String> extractAttributeKeys(TemplateDto template) {
-        if (template.getTexts() == null) return Collections.emptyList();
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // NEW: Extract from `text` field (attribute names)
         return template.getTexts().stream()
-                .map(TemplateTextDto::getDefaultValue)
+                .map(TemplateTextDto::getText) // Changed from getDefaultValue()
                 .filter(v -> v != null && !v.isBlank())
-                .distinct().toList();
+                .distinct()
+                .toList();
     }
 
     // ==================== MESSAGE BUILDING ====================
@@ -249,7 +289,8 @@ public class TemplateBuilderForCsvServiceImpl {
                 case BODY -> addIfNotNull(components, buildBody(template, phone, ctx, null));
                 case BUTTONS -> addAll(components, buildButtons(template, comp, phone, ctx, null));
                 case CAROUSEL -> addIfNotNull(components, buildCarousel(comp, template, phone, ctx, csv));
-                case LIMITED_TIME_OFFER -> {} // Not supported in CSV
+                case LIMITED_TIME_OFFER -> {
+                } // Not supported in CSV
                 default -> throw new InvalidTemplateComponentType("Unsupported: " + comp.getType());
             }
         }
@@ -271,7 +312,8 @@ public class TemplateBuilderForCsvServiceImpl {
 
     private Component buildHeaderText(TemplateDto template, String phone, CsvParameterContext ctx, Integer cardIdx) {
         List<TemplateTextDto> texts = filterTexts(template, "HEADER", cardIdx);
-        if (texts.isEmpty()) return null;
+        if (texts.isEmpty())
+            return null;
 
         List<Parameter> params = texts.stream()
                 .map(t -> resolveNonCarouselValue(t, phone, ctx))
@@ -279,7 +321,8 @@ public class TemplateBuilderForCsvServiceImpl {
                 .map(v -> textParam(v))
                 .collect(Collectors.toList());
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         Component c = new Component();
         c.setType("header");
@@ -289,7 +332,8 @@ public class TemplateBuilderForCsvServiceImpl {
 
     private Component buildHeaderMedia(TemplateComponentDto comp) {
         String url = extractMediaUrl(comp);
-        if (url == null) return null;
+        if (url == null)
+            return null;
 
         MediaType type = MediaType.fromValue(comp.getFormat());
         Component c = new Component();
@@ -302,13 +346,15 @@ public class TemplateBuilderForCsvServiceImpl {
 
     private Component buildBody(TemplateDto template, String phone, CsvParameterContext ctx, Integer cardIdx) {
         List<TemplateTextDto> texts = filterTexts(template, "BODY", cardIdx);
-        if (texts.isEmpty()) return null;
+        if (texts.isEmpty())
+            return null;
 
         List<Parameter> params = texts.stream()
                 .map(t -> textParam(resolveNonCarouselValue(t, phone, ctx)))
                 .collect(Collectors.toList());
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         Component c = new Component();
         c.setType("body");
@@ -321,17 +367,21 @@ public class TemplateBuilderForCsvServiceImpl {
     private List<Component> buildButtons(TemplateDto template, TemplateComponentDto comp,
             String phone, CsvParameterContext ctx, Integer cardIdx) {
         List<Component> result = new ArrayList<>();
-        if (comp.getButtons() == null) return result;
+        if (comp.getButtons() == null)
+            return result;
 
         for (int i = 0; i < comp.getButtons().size(); i++) {
             TemplateComponentButtonDto btn = comp.getButtons().get(i);
-            if (ButtonTypes.fromValue(btn.getType()) != ButtonTypes.URL) continue;
+            if (ButtonTypes.fromValue(btn.getType()) != ButtonTypes.URL)
+                continue;
 
             List<TemplateTextDto> btnTexts = filterTexts(template, "BUTTON", cardIdx);
-            if (btnTexts.isEmpty()) continue;
+            if (btnTexts.isEmpty())
+                continue;
 
             String val = resolveNonCarouselValue(btnTexts.get(0), phone, ctx);
-            if (val.isEmpty()) continue;
+            if (val.isEmpty())
+                continue;
 
             Component c = new Component();
             c.setType("button");
@@ -391,8 +441,10 @@ public class TemplateBuilderForCsvServiceImpl {
     private CarouselComponent buildCarouselHeader(TemplateCarouselCardComponent comp,
             Integer cardIdx, CardParameters csvParams) {
         String url = csvParams.getImageUrl();
-        if (url == null || url.isBlank()) url = extractCarouselMediaUrl(comp);
-        if (url == null) return null;
+        if (url == null || url.isBlank())
+            url = extractCarouselMediaUrl(comp);
+        if (url == null)
+            return null;
 
         MediaType type = MediaType.fromValue(comp.getFormat());
         CarouselComponent c = new CarouselComponent();
@@ -404,12 +456,13 @@ public class TemplateBuilderForCsvServiceImpl {
     private CarouselComponent buildCarouselBody(TemplateDto template, Integer cardIdx,
             CardParameters csvParams, CsvParameterContext ctx) {
         List<TemplateTextDto> texts = filterTexts(template, "BODY", cardIdx);
-        if (texts.isEmpty()) return null;
+        if (texts.isEmpty())
+            return null;
 
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto t : texts) {
             int varIdx = t.getTextIndex() != null ? t.getTextIndex() : 0;
-            
+
             // IMPORTANT: varIdx is 0-based from template, but we look up with 1-based key
             // because parseCarouselParams now uses 1-based indexing
             String val = csvParams.getBodyVariables().get(varIdx + 1);
@@ -420,7 +473,8 @@ public class TemplateBuilderForCsvServiceImpl {
             params.add(textParam(val));
         }
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
         CarouselComponent c = new CarouselComponent();
         c.setType("body");
         c.setParameters(params);
@@ -441,7 +495,7 @@ public class TemplateBuilderForCsvServiceImpl {
 
             if (type == ButtonTypes.URL) {
                 Map<Integer, String> btnVars = csvParams.getButtonVariables().getOrDefault(i, new HashMap<>());
-                
+
                 // Look up with 1-based key (always 1 for URL buttons)
                 String val = btnVars.get(1);
                 if (val == null && btn.getExample() != null && !btn.getExample().isEmpty()) {
@@ -472,36 +526,56 @@ public class TemplateBuilderForCsvServiceImpl {
 
     // ==================== VALUE RESOLUTION ====================
 
+    /**
+     * Resolve non-carousel variable value with NEW field mapping.
+     * 
+     * Resolution priority:
+     * 1. Contact attribute (using `text` field as attribute key)
+     * 2. Per-contact CSV variable (from request)
+     * 3. Global CSV variable (from request)
+     * 4. defaultValue (example value from Facebook - fallback)
+     */
     private String resolveNonCarouselValue(TemplateTextDto text, String phone, CsvParameterContext ctx) {
         int varIdx = text.getTextIndex() != null ? text.getTextIndex() : 0;
         String key = compositeKey(text.getType(), text.getTextIndex(), text.getCardIndex(), text.getIsCarousel());
 
-        // 1. Contact attribute
-        if (text.getDefaultValue() != null && !text.getDefaultValue().isBlank()) {
+        // Priority 1: Contact attribute (NEW - using `text` field as attribute key)
+        if (text.getText() != null && !text.getText().isBlank()) {
             String attrVal = ctx.getContactAttributes()
                     .getOrDefault(phone, new HashMap<>())
-                    .get(text.getDefaultValue());
-            if (attrVal != null && !attrVal.isBlank()) return attrVal;
+                    .get(text.getText()); // NEW: text = attribute name
+
+            if (attrVal != null && !attrVal.isBlank()) {
+                log.debug("Resolved contact attr for {}: {} = {}", phone, text.getText(), attrVal);
+                return attrVal;
+            }
         }
 
-        // 2. Per-contact CSV (now using 1-based indexing)
+        // Priority 2: Per-contact CSV (1-based lookup)
         String perContact = ctx.getPerContactVariables()
                 .getOrDefault(phone, new HashMap<>())
-                .get(varIdx + 1); // 1-based lookup
-        if (perContact != null && !perContact.isBlank()) return perContact;
+                .get(varIdx + 1);
+        if (perContact != null && !perContact.isBlank()) {
+            return perContact;
+        }
 
-        // 3. Global CSV (now using 1-based indexing)
-        String global = ctx.getGlobalVariables().get(varIdx + 1); // 1-based lookup
-        if (global != null && !global.isBlank()) return global;
+        // Priority 3: Global CSV (1-based lookup)
+        String global = ctx.getGlobalVariables().get(varIdx + 1);
+        if (global != null && !global.isBlank()) {
+            return global;
+        }
 
-        // 4. Fallback
-        return ctx.getFallbackValues().getOrDefault(key, "");
+        // Priority 4: Fallback to defaultValue (example value from Facebook)
+        String fallback = ctx.getFallbackValues().getOrDefault(key, "");
+        log.debug("Using fallback for {}: {}", key, fallback);
+        return fallback;
     }
 
     // ==================== HELPERS ====================
 
     private List<TemplateTextDto> filterTexts(TemplateDto template, String type, Integer cardIdx) {
-        if (template.getTexts() == null) return Collections.emptyList();
+        if (template.getTexts() == null)
+            return Collections.emptyList();
         return template.getTexts().stream()
                 .filter(t -> type.equalsIgnoreCase(t.getType()))
                 .filter(t -> matchesCard(t, cardIdx))
@@ -512,7 +586,8 @@ public class TemplateBuilderForCsvServiceImpl {
     }
 
     private boolean matchesCard(TemplateTextDto t, Integer cardIdx) {
-        if (cardIdx == null) return t.getIsCarousel() == null || !t.getIsCarousel();
+        if (cardIdx == null)
+            return t.getIsCarousel() == null || !t.getIsCarousel();
         return t.getIsCarousel() != null && t.getIsCarousel() && cardIdx.equals(t.getCardIndex());
     }
 
@@ -563,13 +638,24 @@ public class TemplateBuilderForCsvServiceImpl {
         return p;
     }
 
-    private <T> void addIfNotNull(List<T> list, T elem) { if (elem != null) list.add(elem); }
-    private <T> void addAll(List<T> list, List<T> elems) { if (elems != null) list.addAll(elems); }
-    private <T> List<T> optList(T elem) { return elem != null ? List.of(elem) : Collections.emptyList(); }
+    private <T> void addIfNotNull(List<T> list, T elem) {
+        if (elem != null)
+            list.add(elem);
+    }
+
+    private <T> void addAll(List<T> list, List<T> elems) {
+        if (elems != null)
+            list.addAll(elems);
+    }
+
+    private <T> List<T> optList(T elem) {
+        return elem != null ? List.of(elem) : Collections.emptyList();
+    }
 
     // ==================== INNER CLASSES ====================
 
-    @Data @Builder
+    @Data
+    @Builder
     private static class CsvParameterContext {
         private Map<String, String> fallbackValues;
         private Map<String, Map<Integer, String>> perContactVariables;
@@ -578,7 +664,8 @@ public class TemplateBuilderForCsvServiceImpl {
         private Map<String, Map<String, String>> contactAttributes;
     }
 
-    @Data @Builder
+    @Data
+    @Builder
     private static class CardParameters {
         private Map<Integer, String> bodyVariables;
         private Map<Integer, Map<Integer, String>> buttonVariables;

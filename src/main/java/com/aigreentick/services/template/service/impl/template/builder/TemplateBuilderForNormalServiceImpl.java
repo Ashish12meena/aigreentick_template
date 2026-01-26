@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.service.impl.template;
+package com.aigreentick.services.template.service.impl.template.builder;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,7 +33,8 @@ import lombok.extern.slf4j.Slf4j;
  * Builds WhatsApp API message payloads for Normal Broadcast flow.
  * 
  * Key differences from CSV flow:
- * - Non-carousel variables come as comma-separated string (same for ALL contacts)
+ * - Non-carousel variables come as comma-separated string (same for ALL
+ * contacts)
  * - No per-contact variable override for non-carousel
  * - No button variables for non-carousel templates
  * - Carousel variables use same CarouselCardDto structure as CSV
@@ -59,7 +60,7 @@ public class TemplateBuilderForNormalServiceImpl {
             TemplateDto template,
             SendTemplateNormalRequestDto request) {
 
-        log.info("Building {} messages from Normal request for template: {}", 
+        log.info("Building {} messages from Normal request for template: {}",
                 phoneNumbers.size(), template.getName());
 
         // Build parameter context
@@ -107,7 +108,8 @@ public class TemplateBuilderForNormalServiceImpl {
      * Parse comma-separated variables string into indexed map.
      * Example: "John,Doe,Premium" -> {1: "John", 2: "Doe", 3: "Premium"}
      * 
-     * Empty values are preserved: "John,,Premium" -> {1: "John", 2: "", 3: "Premium"}
+     * Empty values are preserved: "John,,Premium" -> {1: "John", 2: "", 3:
+     * "Premium"}
      */
     private Map<Integer, String> parseVariablesString(String variables) {
         Map<Integer, String> result = new HashMap<>();
@@ -125,20 +127,24 @@ public class TemplateBuilderForNormalServiceImpl {
     }
 
     /**
-     * Build fallback values map from template texts.
-     * Priority: defaultValue > text (example value)
+     * Build fallback values map with NEW field mapping.
+     * Priority: defaultValue (example value from Facebook)
      */
     private Map<String, String> buildFallbackValues(TemplateDto template) {
         Map<String, String> fallbacks = new HashMap<>();
-        if (template.getTexts() == null) return fallbacks;
+        if (template.getTexts() == null)
+            return fallbacks;
 
         for (TemplateTextDto t : template.getTexts()) {
             String key = compositeKey(t.getType(), t.getTextIndex(), t.getCardIndex(), t.getIsCarousel());
+
+            // NEW: defaultValue is the example value from Facebook (primary fallback)
             String val = t.getDefaultValue();
             if (val == null || val.isBlank()) {
-                val = t.getText();
+                val = "";
             }
-            fallbacks.put(key, val != null ? val : "");
+
+            fallbacks.put(key, val);
         }
         return fallbacks;
     }
@@ -148,10 +154,12 @@ public class TemplateBuilderForNormalServiceImpl {
      */
     private Map<Integer, CardParameters> parseCarouselParams(List<CarouselCardDto> cards) {
         Map<Integer, CardParameters> result = new HashMap<>();
-        if (cards == null) return result;
+        if (cards == null)
+            return result;
 
         for (CarouselCardDto card : cards) {
-            if (card.getCardIndex() == null) continue;
+            if (card.getCardIndex() == null)
+                continue;
 
             result.put(card.getCardIndex(), CardParameters.builder()
                     .bodyVariables(parseStringKeys(card.getVariables()))
@@ -164,7 +172,8 @@ public class TemplateBuilderForNormalServiceImpl {
 
     private Map<Integer, Map<Integer, String>> parseButtonVars(List<CarouselButtonDto> buttons) {
         Map<Integer, Map<Integer, String>> result = new HashMap<>();
-        if (buttons == null) return result;
+        if (buttons == null)
+            return result;
 
         for (int i = 0; i < buttons.size(); i++) {
             if (buttons.get(i).getVariables() != null) {
@@ -176,7 +185,8 @@ public class TemplateBuilderForNormalServiceImpl {
 
     private Map<Integer, String> parseStringKeys(Map<String, String> input) {
         Map<Integer, String> result = new HashMap<>();
-        if (input == null) return result;
+        if (input == null)
+            return result;
         input.forEach((k, v) -> {
             try {
                 result.put(Integer.parseInt(k), v);
@@ -187,14 +197,21 @@ public class TemplateBuilderForNormalServiceImpl {
     }
 
     /**
-     * Extract attribute keys that might be stored in defaultValue field
-     * for contact attribute mapping.
+     * Extract attribute keys from `text` field (NEW mapping).
+     * 
+     * OLD: defaultValue stored attribute keys
+     * NEW: text field stores attribute keys
      */
     private List<String> extractAttributeKeys(TemplateDto template) {
-        if (template.getTexts() == null) return Collections.emptyList();
+        if (template.getTexts() == null || template.getTexts().isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        // NEW: Extract from `text` field (attribute names)
         return template.getTexts().stream()
-                .map(TemplateTextDto::getDefaultValue)
-                .filter(v -> v != null && !v.isBlank())
+                .map(TemplateTextDto::getText) // Changed from getDefaultValue()
+                .filter(Objects::nonNull)
+                .filter(val -> !val.isBlank())
                 .distinct()
                 .toList();
     }
@@ -223,7 +240,8 @@ public class TemplateBuilderForNormalServiceImpl {
                 case BODY -> addIfNotNull(components, buildBody(template, phone, ctx));
                 case BUTTONS -> addAll(components, buildButtons(comp));
                 case CAROUSEL -> addIfNotNull(components, buildCarousel(comp, template, ctx, request));
-                case LIMITED_TIME_OFFER -> {} // Not supported in normal flow
+                case LIMITED_TIME_OFFER -> {
+                } // Not supported in normal flow
                 default -> throw new InvalidTemplateComponentType("Unsupported: " + comp.getType());
             }
         }
@@ -250,7 +268,8 @@ public class TemplateBuilderForNormalServiceImpl {
 
     private Component buildHeaderText(TemplateDto template, String phone, NormalParameterContext ctx) {
         List<TemplateTextDto> texts = filterTexts(template, "HEADER", null);
-        if (texts.isEmpty()) return null;
+        if (texts.isEmpty())
+            return null;
 
         List<Parameter> params = texts.stream()
                 .map(t -> resolveNonCarouselValue(t, phone, ctx))
@@ -258,7 +277,8 @@ public class TemplateBuilderForNormalServiceImpl {
                 .map(this::textParam)
                 .collect(Collectors.toList());
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         Component c = new Component();
         c.setType("header");
@@ -268,7 +288,8 @@ public class TemplateBuilderForNormalServiceImpl {
 
     private Component buildHeaderMedia(TemplateComponentDto comp, SendTemplateNormalRequestDto request) {
         String url = resolveMediaUrl(comp, request);
-        if (url == null) return null;
+        if (url == null)
+            return null;
 
         MediaType type = MediaType.fromValue(comp.getFormat());
         Component c = new Component();
@@ -281,13 +302,15 @@ public class TemplateBuilderForNormalServiceImpl {
 
     private Component buildBody(TemplateDto template, String phone, NormalParameterContext ctx) {
         List<TemplateTextDto> texts = filterTexts(template, "BODY", null);
-        if (texts.isEmpty()) return null;
+        if (texts.isEmpty())
+            return null;
 
         List<Parameter> params = texts.stream()
                 .map(t -> textParam(resolveNonCarouselValue(t, phone, ctx)))
                 .collect(Collectors.toList());
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
 
         Component c = new Component();
         c.setType("body");
@@ -304,7 +327,8 @@ public class TemplateBuilderForNormalServiceImpl {
      */
     private List<Component> buildButtons(TemplateComponentDto comp) {
         List<Component> result = new ArrayList<>();
-        if (comp.getButtons() == null) return result;
+        if (comp.getButtons() == null)
+            return result;
 
         // Non-carousel buttons in normal flow have no variable support
         // Only handle QUICK_REPLY with static payload
@@ -400,7 +424,8 @@ public class TemplateBuilderForNormalServiceImpl {
         if (url == null || url.isBlank()) {
             url = extractCarouselMediaUrl(comp);
         }
-        if (url == null) return null;
+        if (url == null)
+            return null;
 
         MediaType type = MediaType.fromValue(comp.getFormat());
         CarouselComponent c = new CarouselComponent();
@@ -416,7 +441,8 @@ public class TemplateBuilderForNormalServiceImpl {
             NormalParameterContext ctx) {
 
         List<TemplateTextDto> texts = filterTexts(template, "BODY", cardIdx);
-        if (texts.isEmpty()) return null;
+        if (texts.isEmpty())
+            return null;
 
         List<Parameter> params = new ArrayList<>();
         for (TemplateTextDto t : texts) {
@@ -431,7 +457,8 @@ public class TemplateBuilderForNormalServiceImpl {
             params.add(textParam(val));
         }
 
-        if (params.isEmpty()) return null;
+        if (params.isEmpty())
+            return null;
         CarouselComponent c = new CarouselComponent();
         c.setType("body");
         c.setParameters(params);
@@ -492,37 +519,46 @@ public class TemplateBuilderForNormalServiceImpl {
     // ==================== VALUE RESOLUTION ====================
 
     /**
-     * Resolve non-carousel variable value.
-     * Priority: Global Variables > Contact Attribute > Fallback
+     * Resolve non-carousel variable value with NEW field mapping.
+     * 
+     * Resolution priority:
+     * 1. Global variables (from comma-separated string)
+     * 2. Contact attribute (using `text` field as attribute key)
+     * 3. defaultValue (example value from Facebook - fallback)
      */
     private String resolveNonCarouselValue(TemplateTextDto text, String phone, NormalParameterContext ctx) {
         int varIdx = text.getTextIndex() != null ? text.getTextIndex() : 0;
         String key = compositeKey(text.getType(), text.getTextIndex(), text.getCardIndex(), text.getIsCarousel());
 
-        // 1. Global variables (from comma-separated string) - 1-based index
+        // Priority 1: Global variables (from comma-separated string) - 1-based index
         String globalVal = ctx.getGlobalVariables().get(varIdx + 1);
         if (globalVal != null && !globalVal.isBlank()) {
             return globalVal;
         }
 
-        // 2. Contact attribute (if defaultValue is an attribute key)
-        if (text.getDefaultValue() != null && !text.getDefaultValue().isBlank()) {
+        // Priority 2: Contact attribute (NEW - using `text` field as attribute key)
+        if (text.getText() != null && !text.getText().isBlank()) {
             String attrVal = ctx.getContactAttributes()
                     .getOrDefault(phone, new HashMap<>())
-                    .get(text.getDefaultValue());
+                    .get(text.getText()); // NEW: text = attribute name
+
             if (attrVal != null && !attrVal.isBlank()) {
+                log.debug("Resolved contact attr for {}: {} = {}", phone, text.getText(), attrVal);
                 return attrVal;
             }
         }
 
-        // 3. Fallback (default or example)
-        return ctx.getFallbackValues().getOrDefault(key, "");
+        // Priority 3: Fallback to defaultValue (example value from Facebook)
+        String fallback = ctx.getFallbackValues().getOrDefault(key, "");
+        log.debug("Using fallback for {}: {}", key, fallback);
+        return fallback;
     }
 
     // ==================== HELPERS ====================
 
     private List<TemplateTextDto> filterTexts(TemplateDto template, String type, Integer cardIdx) {
-        if (template.getTexts() == null) return Collections.emptyList();
+        if (template.getTexts() == null)
+            return Collections.emptyList();
         return template.getTexts().stream()
                 .filter(t -> type.equalsIgnoreCase(t.getType()))
                 .filter(t -> matchesCard(t, cardIdx))
@@ -593,11 +629,13 @@ public class TemplateBuilderForNormalServiceImpl {
     }
 
     private <T> void addIfNotNull(List<T> list, T elem) {
-        if (elem != null) list.add(elem);
+        if (elem != null)
+            list.add(elem);
     }
 
     private <T> void addAll(List<T> list, List<T> elems) {
-        if (elems != null) list.addAll(elems);
+        if (elems != null)
+            list.addAll(elems);
     }
 
     private <T> List<T> optList(T elem) {
