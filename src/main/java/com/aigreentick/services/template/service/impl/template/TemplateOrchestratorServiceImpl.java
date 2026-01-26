@@ -44,7 +44,6 @@ public class TemplateOrchestratorServiceImpl {
     private final ObjectMapper objectMapper;
     private final UserService userService;
     private final FacebookTemplateSyncMapper facebookTemplateSyncMapper;
-    
 
     public TemplateResponseDto createTemplate(CreateTemplateRequestDto requestDto, Long userId) {
         log.info("Creating template for userId: {}", userId);
@@ -56,7 +55,7 @@ public class TemplateOrchestratorServiceImpl {
 
         String payload = JsonHelper.serialize(requestDto);
 
-        Template template = templateMapper.maptoTemplateEntity(payload,userId,requestDto);
+        Template template = templateMapper.mapToTemplateEntity(payload,userId,requestDto);
 
         templateServiceImpl.save(template);
 

@@ -1,53 +1,34 @@
 package com.aigreentick.services.template.mapper;
-
-import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import org.springframework.stereotype.Component;
 
-import com.aigreentick.services.template.dto.build.SupportedAppDto;
-import com.aigreentick.services.template.dto.build.TemplateCarouselButton;
-import com.aigreentick.services.template.dto.build.TemplateCarouselCardComponent;
-import com.aigreentick.services.template.dto.build.TemplateCarouselExample;
-import com.aigreentick.services.template.dto.build.TemplateComponentButtonDto;
-import com.aigreentick.services.template.dto.build.TemplateComponentCardsDto;
-import com.aigreentick.services.template.dto.build.TemplateComponentDto;
-import com.aigreentick.services.template.dto.build.TemplateDto;
-import com.aigreentick.services.template.dto.build.TemplateExampleDto;
+import com.aigreentick.services.template.dto.build.*;
 import com.aigreentick.services.template.dto.build.TemplateTextDto;
-import com.aigreentick.services.template.dto.request.template.CreateTemplateResponseDto;
-import com.aigreentick.services.template.dto.request.template.SupportedAppRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateCarouselButtonRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateCarouselCardComponentRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateCarouselExampleRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateComponentButtonRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateComponentCardsRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateComponentRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateExampleRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateRequest;
-import com.aigreentick.services.template.dto.request.template.TemplateTextRequest;
 import com.aigreentick.services.template.dto.request.template.create.CreateTemplateRequestDto;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
-import com.aigreentick.services.template.enums.ComponentType;
 import com.aigreentick.services.template.enums.MediaFormat;
-import com.aigreentick.services.template.model.template.SupportedApp;
-import com.aigreentick.services.template.model.template.Template;
-import com.aigreentick.services.template.model.template.TemplateCarouselCard;
-import com.aigreentick.services.template.model.template.TemplateCarouselCardButton;
-import com.aigreentick.services.template.model.template.TemplateComponent;
-import com.aigreentick.services.template.model.template.TemplateComponentButton;
-import com.aigreentick.services.template.model.template.TemplateText;
+import com.aigreentick.services.template.model.template.*;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
+/**
+ * Maps between Template entities and DTOs.
+ * 
+ * Responsibilities:
+ * - Entity to DTO conversion for API responses
+ * - Request DTO to Entity for template creation
+ * - Entity to sendable DTO for WhatsApp API
+ * 
+ * Note: Facebook sync mapping is now in FacebookTemplateSyncMapper
+ */
 @Component
 @RequiredArgsConstructor
 @Slf4j
@@ -76,49 +57,24 @@ public class TemplateMapper {
                 .build();
     }
 
-    // ==================== PUBLIC API - FACEBOOK TO ENTITY ====================
-
-    public Template fromFacebookTemplate(TemplateRequest fbTemplate, Long userId, String wabaId) {
-        Template template = buildBaseTemplate(fbTemplate, userId);
-
-        if (fbTemplate.getComponents() != null) {
-            // First add all components
-            for (TemplateComponentRequest compReq : fbTemplate.getComponents()) {
-                template.addComponent(mapToComponentEntity(compReq));
-            }
-
-            // Then extract text variables with component references
-            extractAllTextVariables(fbTemplate.getComponents(), template);
-        }
-
-        return template;
-    }
-
     // ==================== PUBLIC API - REQUEST TO ENTITY ====================
 
-    public Template toTemplateEntity(CreateTemplateResponseDto request, Long userId) {
-        TemplateRequest req = request.getTemplate();
-        Template template = buildBaseTemplate(req, userId);
-
-        if (req.getComponents() != null) {
-            for (TemplateComponentRequest compReq : req.getComponents()) {
-                template.addComponent(mapToComponentEntity(compReq));
-            }
-
-            extractAllTextVariables(req.getComponents(), template);
-        }
-
-        if (request.getVariables() != null) {
-            for (TemplateTextRequest textReq : request.getVariables()) {
-                template.addText(mapToTextEntity(textReq));
-            }
-        }
-
-        return template;
+    /**
+     * Maps CreateTemplateRequestDto to Template entity (new_created status).
+     * Used when creating templates locally before Facebook submission.
+     */
+    public Template mapToTemplateEntity(String payload, Long userId, CreateTemplateRequestDto requestDto) {
+        return Template.builder()
+                .userId(userId)
+                .name(requestDto.getTemplate().getName())
+                .language(requestDto.getTemplate().getLanguage())
+                .category(requestDto.getTemplate().getCategory())
+                .status("new_created")
+                .payload(payload)
+                .build();
     }
 
-    // ==================== PUBLIC API - ENTITY TO DTO (FOR SENDING)
-    // ====================
+    // ==================== PUBLIC API - ENTITY TO DTO (FOR SENDING) ====================
 
     public TemplateDto toTemplateDto(Template template) {
         TemplateDto dto = new TemplateDto();
@@ -142,428 +98,6 @@ public class TemplateMapper {
         }
 
         return dto;
-    }
-
-    // ==================== TEXT VARIABLE EXTRACTION ====================
-
-    private void extractAllTextVariables(List<TemplateComponentRequest> components, Template template) {
-        if (components == null)
-            return;
-
-        for (int i = 0; i < components.size(); i++) {
-            TemplateComponentRequest componentReq = components.get(i);
-            ComponentType type = componentReq.getType();
-
-            // Find the corresponding TemplateComponent entity
-            TemplateComponent componentEntity = template.getComponents().get(i);
-
-            if (type == ComponentType.CAROUSEL) {
-                extractCarouselTextVariables(componentReq, template, componentEntity);
-            } else {
-                extractRegularTextVariables(componentReq, template, componentEntity);
-            }
-        }
-    }
-
-    private void extractRegularTextVariables(TemplateComponentRequest component, Template template,
-            TemplateComponent componentEntity) {
-        ComponentType type = component.getType();
-        TemplateExampleRequest example = component.getExample();
-
-        switch (type) {
-            case HEADER -> extractHeaderTextVariables(example, template, componentEntity);
-            case BODY -> extractBodyTextVariables(example, template, componentEntity);
-            case BUTTONS -> extractButtonTextVariables(component.getButtons(), template, componentEntity);
-            default -> {
-                /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
-        }
-    }
-
-    /**
-     * Extract HEADER text variables with example values
-     */
-    private void extractHeaderTextVariables(TemplateExampleRequest example, Template template,
-            TemplateComponent component) {
-        if (example == null || example.getHeaderText() == null)
-            return;
-
-        List<String> headerTexts = example.getHeaderText();
-        for (int i = 0; i < headerTexts.size(); i++) {
-            String exampleValue = headerTexts.get(i);
-            // Use i + 1 for 1-based indexing
-            template.addText(buildTemplateText(
-                    "HEADER",
-                    exampleValue,
-                    i + 1, // Changed from i to i + 1
-                    false,
-                    null,
-                    null,
-                    component));
-        }
-        log.debug("Extracted {} HEADER text variables with 1-based indexing", headerTexts.size());
-    }
-
-    /**
-     * Extract BODY text variables with example values
-     */
-    private void extractBodyTextVariables(TemplateExampleRequest example, Template template,
-            TemplateComponent component) {
-        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty())
-            return;
-
-        List<String> bodyTexts = example.getBodyText().get(0);
-        for (int i = 0; i < bodyTexts.size(); i++) {
-            String exampleValue = bodyTexts.get(i);
-            // Use i + 1 for 1-based indexing
-            template.addText(buildTemplateText(
-                    "BODY",
-                    exampleValue,
-                    i + 1, // Changed from i to i + 1
-                    false,
-                    null,
-                    null,
-                    component));
-        }
-        log.debug("Extracted {} BODY text variables with 1-based indexing", bodyTexts.size());
-    }
-
-    /**
-     * Extract BUTTON text variables with example values
-     */
-    private void extractButtonTextVariables(List<TemplateComponentButtonRequest> buttons, Template template,
-            TemplateComponent component) {
-        if (buttons == null)
-            return;
-
-        for (TemplateComponentButtonRequest btn : buttons) {
-            if (btn.getExample() == null || btn.getExample().isEmpty())
-                continue;
-
-            int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
-            List<String> examples = btn.getExample();
-
-            for (int i = 0; i < examples.size(); i++) {
-                String exampleValue = examples.get(i);
-                // Use i + 1 for 1-based indexing
-                template.addText(buildTemplateText(
-                        "BUTTON",
-                        exampleValue,
-                        i + 1, // Changed from i to i + 1
-                        false,
-                        null,
-                        null,
-                        component));
-            }
-            log.debug("Extracted {} BUTTON text variables for button index {} with 1-based indexing",
-                    examples.size(), buttonIndex);
-        }
-    }
-
-    /**
-     * Extract CAROUSEL text variables with cardIndex and example values
-     * Uses loop index as cardIndex since Facebook API may not return explicit index
-     */
-    private void extractCarouselTextVariables(TemplateComponentRequest component, Template template,
-            TemplateComponent carouselComponent) {
-        if (component.getCards() == null)
-            return;
-
-        List<TemplateComponentCardsRequest> cards = component.getCards();
-
-        for (int i = 0; i < cards.size(); i++) {
-            TemplateComponentCardsRequest card = cards.get(i);
-
-            int cardIndex = card.getIndex() != null ? card.getIndex() : i;
-
-            if (card.getComponents() == null)
-                continue;
-
-            log.debug("Processing carousel card at index: {}", cardIndex);
-
-            for (TemplateCarouselCardComponentRequest cardComp : card.getComponents()) {
-                String compType = cardComp.getType().toUpperCase();
-
-                switch (compType) {
-                    case "HEADER" -> extractCarouselHeaderTexts(cardComp, cardIndex, template, carouselComponent);
-                    case "BODY" -> extractCarouselBodyTexts(cardComp, cardIndex, template, carouselComponent);
-                    case "BUTTONS" -> extractCarouselButtonTexts(cardComp, cardIndex, template, carouselComponent);
-                }
-            }
-        }
-    }
-
-    private void extractCarouselHeaderTexts(TemplateCarouselCardComponentRequest cardComp,
-            int cardIndex, Template template, TemplateComponent carouselComponent) {
-        if (cardComp.getExample() == null)
-            return;
-
-        TemplateCarouselExampleRequest example = cardComp.getExample();
-        if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
-            List<String> headerTexts = example.getHeaderText();
-            for (int i = 0; i < headerTexts.size(); i++) {
-                String exampleValue = headerTexts.get(i);
-                // Use i + 1 for 1-based indexing
-                template.addText(buildTemplateText(
-                        "HEADER",
-                        exampleValue,
-                        i + 1, // Changed from i to i + 1
-                        true,
-                        cardIndex,
-                        null,
-                        carouselComponent));
-            }
-            log.debug("Extracted {} HEADER variables for card {} with 1-based indexing",
-                    headerTexts.size(), cardIndex);
-        }
-    }
-
-    // 9. Update extractCarouselBodyTexts
-    private void extractCarouselBodyTexts(TemplateCarouselCardComponentRequest cardComp,
-            int cardIndex, Template template, TemplateComponent carouselComponent) {
-        if (cardComp.getExample() == null)
-            return;
-
-        TemplateCarouselExampleRequest example = cardComp.getExample();
-        if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
-            List<String> bodyTexts = example.getBodyText().get(0);
-            for (int i = 0; i < bodyTexts.size(); i++) {
-                String exampleValue = bodyTexts.get(i);
-                // Use i + 1 for 1-based indexing
-                template.addText(buildTemplateText(
-                        "BODY",
-                        exampleValue,
-                        i + 1, // Changed from i to i + 1
-                        true,
-                        cardIndex,
-                        null,
-                        carouselComponent));
-            }
-            log.debug("Extracted {} BODY variables for card {} with 1-based indexing",
-                    bodyTexts.size(), cardIndex);
-        }
-    }
-
-    // 10. Update extractCarouselButtonTexts
-    private void extractCarouselButtonTexts(TemplateCarouselCardComponentRequest cardComp,
-            int cardIndex, Template template, TemplateComponent carouselComponent) {
-        if (cardComp.getButtons() == null)
-            return;
-
-        for (TemplateCarouselButtonRequest btn : cardComp.getButtons()) {
-            if (btn.getExample() == null || btn.getExample().isEmpty())
-                continue;
-
-            int buttonIndex = btn.getIndex() != null ? btn.getIndex() : 0;
-            List<String> examples = btn.getExample();
-
-            for (int i = 0; i < examples.size(); i++) {
-                String exampleValue = examples.get(i);
-                // Use i + 1 for 1-based indexing
-                template.addText(buildTemplateText(
-                        "BUTTON",
-                        exampleValue,
-                        i + 1, // Changed from i to i + 1
-                        true,
-                        cardIndex,
-                        null,
-                        carouselComponent));
-            }
-            log.debug("Extracted {} BUTTON variables for card {} button {} with 1-based indexing",
-                    examples.size(), cardIndex, buttonIndex);
-        }
-    }
-
-    // ==================== ENTITY BUILDERS ====================
-
-    private Template buildBaseTemplate(TemplateRequest req, Long userId) {
-        return Template.builder()
-                .userId(userId)
-                .name(req.getName())
-                .language(req.getLanguage())
-                .category(req.getCategory())
-                .previousCategory(req.getPreviousCategory())
-                .status(req.getStatus() != null ? req.getStatus().getValue() : "PENDING")
-                .waId(req.getMetaTemplateId())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
-    /**
-     * Build TemplateText with:
-     * - text: stores example value from Facebook (used as fallback)
-     * - textIndex: position of variable within component type
-     * - cardIndex: card position for carousel templates
-     * - defaultValue: user-configured default (null initially)
-     */
-    private TemplateText buildTemplateText(String type, String exampleValue, int textIndex,
-            boolean isCarousel, Integer cardIndex, String defaultValue,
-            TemplateComponent component) {
-        TemplateText text = TemplateText.builder()
-                .type(type)
-                .text(exampleValue)
-                .textIndex(textIndex)
-                .isCarousel(isCarousel)
-                .cardIndex(cardIndex)
-                .defaultValue(defaultValue)
-                .component(component)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-
-        return text;
-    }
-
-    // ==================== REQUEST TO ENTITY MAPPING ====================
-
-    private TemplateComponent mapToComponentEntity(TemplateComponentRequest req) {
-        TemplateComponent comp = TemplateComponent.builder()
-                .type(req.getType() != null ? req.getType().toString() : null)
-                .format(req.getFormat())
-                .text(req.getText())
-                .imageUrl(req.getImageUrl() != null ? req.getImageUrl() : req.getMediaUrl())
-                .addSecurityRecommendation(req.getAddSecurityRecommendation())
-                .codeExpirationMinutes(req.getCodeExpirationMinutes())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-
-        if (req.getButtons() != null) {
-            AtomicInteger btnIndex = new AtomicInteger(0);
-            for (TemplateComponentButtonRequest btnReq : req.getButtons()) {
-                int index = btnReq.getIndex() != null ? btnReq.getIndex() : btnIndex.getAndIncrement();
-                comp.addButton(mapToButtonEntity(btnReq, index));
-            }
-        }
-
-        if (req.getCards() != null) {
-            List<TemplateComponentCardsRequest> cards = req.getCards();
-            for (int i = 0; i < cards.size(); i++) {
-                TemplateComponentCardsRequest cardReq = cards.get(i);
-                // Use explicit index if available, otherwise use loop index
-                int index = cardReq.getIndex() != null ? cardReq.getIndex() : i;
-                comp.addCarouselCard(mapToCarouselCardEntity(cardReq, index));
-            }
-        }
-
-        return comp;
-    }
-
-    private TemplateComponentButton mapToButtonEntity(TemplateComponentButtonRequest req, int index) {
-        TemplateComponentButton btn = TemplateComponentButton.builder()
-                .type(req.getType() != null ? req.getType().getValue() : null)
-                .otpType(req.getOtpType())
-                .number(req.getPhoneNumber())
-                .text(req.getText())
-                .url(req.getUrl())
-                .buttonIndex(index)
-                .autofillText(req.getAutofillText())
-                // .example(req.getExample())
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-
-        if (req.getSupportedApps() != null) {
-            for (SupportedAppRequest appReq : req.getSupportedApps()) {
-                btn.addSupportedApp(mapToSupportedAppEntity(appReq));
-            }
-        }
-
-        return btn;
-    }
-
-    private TemplateCarouselCard mapToCarouselCardEntity(TemplateComponentCardsRequest req, int index) {
-        TemplateCarouselCard card = TemplateCarouselCard.builder()
-                .cardIndex(index)
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-
-        List<String> allParameters = new ArrayList<>();
-
-        if (req.getComponents() != null) {
-            for (TemplateCarouselCardComponentRequest compReq : req.getComponents()) {
-                processCarouselCardComponent(compReq, card, allParameters);
-            }
-        }
-
-        if (!allParameters.isEmpty()) {
-            card.setParameters(serializeToJson(allParameters));
-        }
-
-        return card;
-    }
-
-    private void processCarouselCardComponent(TemplateCarouselCardComponentRequest compReq,
-            TemplateCarouselCard card, List<String> allParameters) {
-        String type = compReq.getType().toUpperCase();
-
-        switch (type) {
-            case "HEADER" -> {
-                card.setMediaType(compReq.getFormat() != null ? compReq.getFormat().getValue() : null);
-                card.setHeader(compReq.getText());
-
-                if (compReq.getExample() != null) {
-                    if (compReq.getExample().getHeaderHandle() != null
-                            && !compReq.getExample().getHeaderHandle().isEmpty()) {
-                        card.setImageUrl(compReq.getExample().getHeaderHandle().get(0));
-                    }
-                    if (compReq.getExample().getHeaderText() != null) {
-                        allParameters.addAll(compReq.getExample().getHeaderText());
-                    }
-                }
-            }
-            case "BODY" -> {
-                card.setBody(compReq.getText());
-
-                if (compReq.getExample() != null
-                        && compReq.getExample().getBodyText() != null
-                        && !compReq.getExample().getBodyText().isEmpty()) {
-                    allParameters.addAll(compReq.getExample().getBodyText().get(0));
-                }
-            }
-            case "BUTTONS" -> {
-                if (compReq.getButtons() != null) {
-                    for (TemplateCarouselButtonRequest btnReq : compReq.getButtons()) {
-                        card.addButton(mapToCarouselButtonEntity(btnReq));
-                    }
-                }
-            }
-        }
-    }
-
-    private TemplateCarouselCardButton mapToCarouselButtonEntity(TemplateCarouselButtonRequest req) {
-        return TemplateCarouselCardButton.builder()
-                .type(req.getType() != null ? req.getType().getValue() : null)
-                .text(req.getText())
-                .url(req.getUrl())
-                .phoneNumber(req.getPhoneNumber())
-                .cardButtonIndex(req.getIndex())
-                .parameters(serializeToJson(req.getExample()))
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
-    private TemplateText mapToTextEntity(TemplateTextRequest req) {
-        return TemplateText.builder()
-                .type(req.getType())
-                .text(req.getText())
-                .isCarousel(req.isCarousel())
-                .textIndex(req.getTextIndex())
-                .cardIndex(req.getCardIndex())
-                .defaultValue(null)
-                .component(null) // Component will be set separately if needed
-                .createdAt(LocalDateTime.now())
-                .updatedAt(LocalDateTime.now())
-                .build();
-    }
-
-    private SupportedApp mapToSupportedAppEntity(SupportedAppRequest req) {
-        return SupportedApp.builder()
-                .packageName(req.getPackageName())
-                .signatureHash(req.getSignatureHash())
-                .build();
     }
 
     // ==================== ENTITY TO DTO MAPPING ====================
@@ -604,7 +138,6 @@ public class TemplateMapper {
                 .url(button.getUrl())
                 .index(button.getButtonIndex())
                 .autofillText(button.getAutofillText())
-                // .example(button.getExample())
                 .supportedApps(button.getSupportedApps() != null
                         ? button.getSupportedApps().stream().map(this::mapToSupportedAppDto)
                                 .collect(Collectors.toList())
@@ -624,6 +157,7 @@ public class TemplateMapper {
         List<String> parameters = parseJsonArray(card.getParameters());
         int paramIndex = 0;
 
+        // Header
         if (card.getMediaType() != null || card.getImageUrl() != null || card.getHeader() != null) {
             TemplateCarouselCardComponent header = new TemplateCarouselCardComponent();
             header.setType("HEADER");
@@ -654,6 +188,7 @@ public class TemplateMapper {
             components.add(header);
         }
 
+        // Body
         if (card.getBody() != null) {
             TemplateCarouselCardComponent body = new TemplateCarouselCardComponent();
             body.setType("BODY");
@@ -675,6 +210,7 @@ public class TemplateMapper {
             components.add(body);
         }
 
+        // Buttons
         if (card.getButtons() != null && !card.getButtons().isEmpty()) {
             TemplateCarouselCardComponent buttons = new TemplateCarouselCardComponent();
             buttons.setType("BUTTONS");
@@ -702,8 +238,8 @@ public class TemplateMapper {
         TemplateTextDto dto = new TemplateTextDto();
         dto.setType(text.getType());
         dto.setTextIndex(text.getTextIndex());
-        dto.setText(text.getText()); // Example value (fallback)
-        dto.setDefaultValue(text.getDefaultValue()); // User-configured default
+        dto.setText(text.getText());
+        dto.setDefaultValue(text.getDefaultValue());
         dto.setIsCarousel(text.getIsCarousel());
         dto.setCardIndex(text.getCardIndex());
         return dto;
@@ -736,20 +272,6 @@ public class TemplateMapper {
 
     // ==================== UTILITY METHODS ====================
 
-    private String serializeToJson(List<String> list) {
-        if (list == null || list.isEmpty())
-            return null;
-
-        try {
-            return objectMapper.writeValueAsString(list);
-        } catch (JsonProcessingException e) {
-            log.warn("Failed to serialize list to JSON, using fallback", e);
-            return "[" + list.stream()
-                    .map(s -> "\"" + s.replace("\"", "\\\"") + "\"")
-                    .collect(Collectors.joining(",")) + "]";
-        }
-    }
-
     private List<String> parseJsonArray(String json) {
         if (json == null || json.isEmpty())
             return new ArrayList<>();
@@ -773,16 +295,5 @@ public class TemplateMapper {
         while (matcher.find())
             count++;
         return count;
-    }
-
-    public Template maptoTemplateEntity(String payload,Long userId,CreateTemplateRequestDto requestDto) {
-        return Template.builder()
-            .userId(userId)
-            .name(requestDto.getTemplate().getName())
-            .language(requestDto.getTemplate().getLanguage())
-            .category(requestDto.getTemplate().getCategory())
-            .status("new_created")
-            .payload(payload)
-            .build();
     }
 }
