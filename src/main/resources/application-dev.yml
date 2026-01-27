@@ -66,4 +66,4 @@ apiVersion: v23.0
 media:
   upload:
     directory: uploads/media
-  base-url: https://aigreentick.com
+  base-url: http://localhost:8080

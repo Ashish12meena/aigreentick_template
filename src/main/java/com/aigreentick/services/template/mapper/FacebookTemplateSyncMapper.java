@@ -711,6 +711,15 @@ public class FacebookTemplateSyncMapper {
     /**
      * Creates TemplateText entity with attribute mapping support.
      * 
+     * Field mapping logic:
+     * - If attributeName is provided (from variableDefaults):
+     * - text = attributeName (for attribute lookup)
+     * - defaultValue = exampleValue (Facebook fallback)
+     * 
+     * - If attributeName is null (no payload/variableDefaults):
+     * - text = exampleValue (so UI can display it)
+     * - defaultValue = exampleValue (same value for consistency)
+     * 
      * @param type          Component type (HEADER, BODY, BUTTON)
      * @param attributeName Attribute name from VariableDefaultsDto (can be null)
      * @param exampleValue  Example value from Facebook
@@ -728,10 +737,15 @@ public class FacebookTemplateSyncMapper {
             Integer cardIndex,
             TemplateComponent component) {
 
+        // LOGIC: If no attribute name available, use example value in both fields
+        String textValue = (attributeName != null && !attributeName.isBlank())
+                ? attributeName
+                : exampleValue;
+
         return TemplateText.builder()
                 .type(type)
-                .text(attributeName) // attribute name (null if not available)
-                .defaultValue(exampleValue) // example value from Facebook
+                .text(textValue) // attribute name OR example value
+                .defaultValue(exampleValue) // always example value from Facebook
                 .textIndex(textIndex)
                 .isCarousel(isCarousel)
                 .cardIndex(cardIndex)
