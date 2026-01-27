@@ -13,7 +13,7 @@ import com.aigreentick.services.template.dto.request.template.normal.SendTemplat
 import com.aigreentick.services.template.dto.response.common.ResponseMessage;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
 import com.aigreentick.services.template.enums.ResponseStatus;
-import com.aigreentick.services.template.service.impl.template.SendTemplateByNormalOrchestratorServiceImpl;
+import com.aigreentick.services.template.service.impl.template.broadcast.SendTemplateByNormalOrchestratorServiceImpl;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;

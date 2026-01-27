@@ -1,4 +1,4 @@
-package com.aigreentick.services.template.service.impl.template;
+package com.aigreentick.services.template.service.impl.template.broadcast;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,6 +37,7 @@ import com.aigreentick.services.template.service.impl.common.WalletServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.BlacklistServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.ChatContactServiceImpl;
 import com.aigreentick.services.template.service.impl.contact.ContactMessagesServiceImpl;
+import com.aigreentick.services.template.service.impl.template.TemplateServiceImpl;
 import com.aigreentick.services.template.service.impl.template.builder.TemplateBuilderForCsvServiceImpl;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;

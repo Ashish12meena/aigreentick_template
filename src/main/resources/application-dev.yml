@@ -61,3 +61,9 @@ template:
 
 # duplicate config currently used in @Value injections
 apiVersion: v23.0
+
+# Media Upload Configuration
+media:
+  upload:
+    directory: uploads/media
+  base-url: https://aigreentick.com

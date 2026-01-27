@@ -31,6 +31,7 @@ import com.aigreentick.services.template.model.template.TemplateCarouselCardButt
 import com.aigreentick.services.template.model.template.TemplateComponent;
 import com.aigreentick.services.template.model.template.TemplateComponentButton;
 import com.aigreentick.services.template.model.template.TemplateText;
+import com.aigreentick.services.template.util.helper.MediaUtil;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -42,19 +43,21 @@ import lombok.extern.slf4j.Slf4j;
  * Used during template sync from WhatsApp Business API.
  * 
  * Supports two modes:
- * 1. With VariableDefaultsDto - for templates that were created locally (new_created)
- *    - text = attribute name from VariableDefaultsDto
- *    - defaultValue = example value from Facebook
+ * 1. With VariableDefaultsDto - for templates that were created locally
+ * (new_created)
+ * - text = attribute name from VariableDefaultsDto
+ * - defaultValue = example value from Facebook
  * 
  * 2. Without VariableDefaultsDto - for templates created directly on Facebook
- *    - text = null
- *    - defaultValue = example value from Facebook
+ * - text = null
+ * - defaultValue = example value from Facebook
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
 public class FacebookTemplateSyncMapper {
 
+    private final MediaUtil mediaUtil;
     private final ObjectMapper objectMapper;
 
     // ==================== PUBLIC API ====================
@@ -73,18 +76,19 @@ public class FacebookTemplateSyncMapper {
      * - text = attribute name from VariableDefaultsDto
      * - defaultValue = example value from Facebook
      * 
-     * @param fbTemplate Facebook template response
-     * @param userId User ID
-     * @param wabaId WABA ID
-     * @param variableDefaults Optional attribute mappings from original request payload
+     * @param fbTemplate       Facebook template response
+     * @param userId           User ID
+     * @param wabaId           WABA ID
+     * @param variableDefaults Optional attribute mappings from original request
+     *                         payload
      */
     public Template fromFacebookTemplateWithDefaults(
-            TemplateRequest fbTemplate, 
-            Long userId, 
+            TemplateRequest fbTemplate,
+            Long userId,
             String wabaId,
             VariableDefaultsDto variableDefaults) {
-        
-        log.debug("Mapping Facebook template: {} with variableDefaults: {}", 
+
+        log.debug("Mapping Facebook template: {} with variableDefaults: {}",
                 fbTemplate.getName(), variableDefaults != null ? "present" : "absent");
 
         // Determine template type based on components
@@ -118,15 +122,16 @@ public class FacebookTemplateSyncMapper {
      */
     private Map<String, String> buildAttributeLookupMap(VariableDefaultsDto variableDefaults) {
         Map<String, String> attributeMap = new HashMap<>();
-        
+
         if (variableDefaults == null || variableDefaults.getComponents() == null) {
             return attributeMap;
         }
 
         for (VariableDefaultComponentDto compDto : variableDefaults.getComponents()) {
             String type = compDto.getType();
-            
-            if (type == null) continue;
+
+            if (type == null)
+                continue;
 
             switch (type.toUpperCase()) {
                 case "HEADER", "BODY" -> {
@@ -179,10 +184,11 @@ public class FacebookTemplateSyncMapper {
             List<VariableDefaultComponentDto> cardComponents,
             int cardIndex,
             Map<String, String> attributeMap) {
-        
+
         for (VariableDefaultComponentDto compDto : cardComponents) {
             String type = compDto.getType();
-            if (type == null) continue;
+            if (type == null)
+                continue;
 
             switch (type.toUpperCase()) {
                 case "HEADER", "BODY" -> {
@@ -268,9 +274,18 @@ public class FacebookTemplateSyncMapper {
         if (req.getExample() != null) {
             if (req.getExample().getHeaderHandle() != null
                     && !req.getExample().getHeaderHandle().isEmpty()) {
-                imageUrl = req.getExample().getHeaderHandle().get(0);
+
+                String headerHandle = req.getExample().getHeaderHandle().get(0);
+                String format = req.getFormat() != null ? req.getFormat() : "IMAGE";
+
+                // Download and store media locally
+                log.info("Downloading media from header_handle for format: {}", format);
+                imageUrl = mediaUtil.downloadAndStoreMedia(headerHandle, format);
+
+                log.debug("Stored media URL: {}", imageUrl);
             }
         }
+
         TemplateComponent comp = TemplateComponent.builder()
                 .type(req.getType() != null ? req.getType().toString() : null)
                 .format(req.getFormat())
@@ -385,7 +400,14 @@ public class FacebookTemplateSyncMapper {
                 if (compReq.getExample() != null) {
                     if (compReq.getExample().getHeaderHandle() != null
                             && !compReq.getExample().getHeaderHandle().isEmpty()) {
-                        card.setImageUrl(compReq.getExample().getHeaderHandle().get(0));
+                        String headerHandle = compReq.getExample().getHeaderHandle().get(0);
+                        String format = compReq.getFormat() != null ? compReq.getFormat().getValue() : "IMAGE";
+
+                        log.info("Downloading carousel card media from header_handle");
+                        String localUrl = mediaUtil.downloadAndStoreMedia(
+                                headerHandle, format);
+
+                        card.setImageUrl(localUrl); // Store local public URL
                     }
                     if (compReq.getExample().getHeaderText() != null) {
                         allParameters.addAll(compReq.getExample().getHeaderText());
@@ -424,25 +446,27 @@ public class FacebookTemplateSyncMapper {
                 .build();
     }
 
-    // ==================== TEXT VARIABLE EXTRACTION WITH ATTRIBUTES ====================
+    // ==================== TEXT VARIABLE EXTRACTION WITH ATTRIBUTES
+    // ====================
 
     /**
      * Extracts all text variables from components with attribute mapping support.
      * 
      * If attributeMap has a value for the composite key:
-     *   - text = attribute name (from attributeMap)
-     *   - defaultValue = example value (from Facebook)
+     * - text = attribute name (from attributeMap)
+     * - defaultValue = example value (from Facebook)
      * 
      * If attributeMap does NOT have a value:
-     *   - text = null
-     *   - defaultValue = example value (from Facebook)
+     * - text = null
+     * - defaultValue = example value (from Facebook)
      */
     private void extractAllTextVariablesWithAttributes(
-            List<TemplateComponentRequest> components, 
+            List<TemplateComponentRequest> components,
             Template template,
             Map<String, String> attributeMap) {
-        
-        if (components == null) return;
+
+        if (components == null)
+            return;
 
         for (int i = 0; i < components.size(); i++) {
             TemplateComponentRequest componentReq = components.get(i);
@@ -458,7 +482,8 @@ public class FacebookTemplateSyncMapper {
     }
 
     /**
-     * Extracts variables from non-carousel components (HEADER, BODY, BUTTONS) with attribute mapping.
+     * Extracts variables from non-carousel components (HEADER, BODY, BUTTONS) with
+     * attribute mapping.
      */
     private void extractRegularTextVariablesWithAttributes(
             TemplateComponentRequest component,
@@ -472,8 +497,10 @@ public class FacebookTemplateSyncMapper {
         switch (type) {
             case HEADER -> extractHeaderTextVariablesWithAttributes(example, template, componentEntity, attributeMap);
             case BODY -> extractBodyTextVariablesWithAttributes(example, template, componentEntity, attributeMap);
-            case BUTTONS -> extractButtonTextVariablesWithAttributes(component.getButtons(), template, componentEntity, attributeMap);
-            default -> { /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
+            case BUTTONS -> extractButtonTextVariablesWithAttributes(component.getButtons(), template, componentEntity,
+                    attributeMap);
+            default -> {
+                /* FOOTER, LIMITED_TIME_OFFER - no variables */ }
         }
     }
 
@@ -486,7 +513,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent component,
             Map<String, String> attributeMap) {
 
-        if (example == null || example.getHeaderText() == null) return;
+        if (example == null || example.getHeaderText() == null)
+            return;
 
         List<String> headerTexts = example.getHeaderText();
         for (int i = 0; i < headerTexts.size(); i++) {
@@ -510,7 +538,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent component,
             Map<String, String> attributeMap) {
 
-        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty()) return;
+        if (example == null || example.getBodyText() == null || example.getBodyText().isEmpty())
+            return;
 
         List<String> bodyTexts = example.getBodyText().get(0);
         for (int i = 0; i < bodyTexts.size(); i++) {
@@ -534,10 +563,12 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent component,
             Map<String, String> attributeMap) {
 
-        if (buttons == null) return;
+        if (buttons == null)
+            return;
 
         for (TemplateComponentButtonRequest btn : buttons) {
-            if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
+            if (btn.getExample() == null || btn.getExample().isEmpty())
+                continue;
 
             List<String> examples = btn.getExample();
             for (int i = 0; i < examples.size(); i++) {
@@ -553,7 +584,8 @@ public class FacebookTemplateSyncMapper {
         }
     }
 
-    // ==================== CAROUSEL TEXT EXTRACTION WITH ATTRIBUTES ====================
+    // ==================== CAROUSEL TEXT EXTRACTION WITH ATTRIBUTES
+    // ====================
 
     /**
      * Extracts text variables from carousel cards with attribute mapping.
@@ -564,7 +596,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent carouselComponent,
             Map<String, String> attributeMap) {
 
-        if (component.getCards() == null) return;
+        if (component.getCards() == null)
+            return;
 
         List<TemplateComponentCardsRequest> cards = component.getCards();
 
@@ -572,7 +605,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponentCardsRequest card = cards.get(i);
             int cardIndex = card.getIndex() != null ? card.getIndex() : i;
 
-            if (card.getComponents() == null) continue;
+            if (card.getComponents() == null)
+                continue;
 
             for (TemplateCarouselCardComponentRequest cardComp : card.getComponents()) {
                 String compType = cardComp.getType().toUpperCase();
@@ -596,7 +630,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent carouselComponent,
             Map<String, String> attributeMap) {
 
-        if (cardComp.getExample() == null) return;
+        if (cardComp.getExample() == null)
+            return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getHeaderText() != null && !example.getHeaderText().isEmpty()) {
@@ -610,7 +645,7 @@ public class FacebookTemplateSyncMapper {
                 template.addText(buildTemplateTextWithAttribute(
                         "HEADER", attributeName, exampleValue, textIndex, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} HEADER variables for card {} with attribute mapping", 
+            log.debug("Extracted {} HEADER variables for card {} with attribute mapping",
                     headerTexts.size(), cardIndex);
         }
     }
@@ -622,7 +657,8 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent carouselComponent,
             Map<String, String> attributeMap) {
 
-        if (cardComp.getExample() == null) return;
+        if (cardComp.getExample() == null)
+            return;
 
         TemplateCarouselExampleRequest example = cardComp.getExample();
         if (example.getBodyText() != null && !example.getBodyText().isEmpty()) {
@@ -636,7 +672,7 @@ public class FacebookTemplateSyncMapper {
                 template.addText(buildTemplateTextWithAttribute(
                         "BODY", attributeName, exampleValue, textIndex, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} BODY variables for card {} with attribute mapping", 
+            log.debug("Extracted {} BODY variables for card {} with attribute mapping",
                     bodyTexts.size(), cardIndex);
         }
     }
@@ -648,10 +684,12 @@ public class FacebookTemplateSyncMapper {
             TemplateComponent carouselComponent,
             Map<String, String> attributeMap) {
 
-        if (cardComp.getButtons() == null) return;
+        if (cardComp.getButtons() == null)
+            return;
 
         for (TemplateCarouselButtonRequest btn : cardComp.getButtons()) {
-            if (btn.getExample() == null || btn.getExample().isEmpty()) continue;
+            if (btn.getExample() == null || btn.getExample().isEmpty())
+                continue;
 
             List<String> examples = btn.getExample();
             for (int i = 0; i < examples.size(); i++) {
@@ -663,7 +701,7 @@ public class FacebookTemplateSyncMapper {
                 template.addText(buildTemplateTextWithAttribute(
                         "BUTTON", attributeName, exampleValue, textIndex, true, cardIndex, carouselComponent));
             }
-            log.debug("Extracted {} BUTTON variables for card {} with attribute mapping", 
+            log.debug("Extracted {} BUTTON variables for card {} with attribute mapping",
                     examples.size(), cardIndex);
         }
     }
@@ -673,13 +711,13 @@ public class FacebookTemplateSyncMapper {
     /**
      * Creates TemplateText entity with attribute mapping support.
      * 
-     * @param type Component type (HEADER, BODY, BUTTON)
+     * @param type          Component type (HEADER, BODY, BUTTON)
      * @param attributeName Attribute name from VariableDefaultsDto (can be null)
-     * @param exampleValue Example value from Facebook
-     * @param textIndex 1-based index
-     * @param isCarousel Whether this is a carousel variable
-     * @param cardIndex Card index for carousel (null for non-carousel)
-     * @param component Parent component
+     * @param exampleValue  Example value from Facebook
+     * @param textIndex     1-based index
+     * @param isCarousel    Whether this is a carousel variable
+     * @param cardIndex     Card index for carousel (null for non-carousel)
+     * @param component     Parent component
      */
     private TemplateText buildTemplateTextWithAttribute(
             String type,
@@ -692,8 +730,8 @@ public class FacebookTemplateSyncMapper {
 
         return TemplateText.builder()
                 .type(type)
-                .text(attributeName)           // attribute name (null if not available)
-                .defaultValue(exampleValue)    // example value from Facebook
+                .text(attributeName) // attribute name (null if not available)
+                .defaultValue(exampleValue) // example value from Facebook
                 .textIndex(textIndex)
                 .isCarousel(isCarousel)
                 .cardIndex(cardIndex)
@@ -707,7 +745,8 @@ public class FacebookTemplateSyncMapper {
      * Serializes list to JSON string for storage.
      */
     private String serializeToJson(List<String> list) {
-        if (list == null || list.isEmpty()) return null;
+        if (list == null || list.isEmpty())
+            return null;
 
         try {
             return objectMapper.writeValueAsString(list);
