@@ -5,6 +5,8 @@ import lombok.*;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import com.aigreentick.services.template.enums.BroadcastType;
+
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.Map;
@@ -28,6 +30,10 @@ public class Broadcast {
     @Column(name = "source", length = 255)
     @Builder.Default
     private String source = "WEB";
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "broadcast_type")
+    private BroadcastType  broadcastType;
 
     /* ================= RELATION IDS ================= */
 

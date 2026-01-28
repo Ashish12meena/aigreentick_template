@@ -18,6 +18,7 @@ import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
 import com.aigreentick.services.template.dto.request.template.BroadcastDispatchItemDto;
 import com.aigreentick.services.template.dto.request.template.csv.SendTemplateByCsvRequestDto;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
+import com.aigreentick.services.template.enums.BroadcastType;
 import com.aigreentick.services.template.enums.Platform;
 import com.aigreentick.services.template.enums.TemplateCategory;
 import com.aigreentick.services.template.exceptions.InsufficientBalanceException;
@@ -39,6 +40,7 @@ import com.aigreentick.services.template.service.impl.contact.ChatContactService
 import com.aigreentick.services.template.service.impl.contact.ContactMessagesServiceImpl;
 import com.aigreentick.services.template.service.impl.template.TemplateServiceImpl;
 import com.aigreentick.services.template.service.impl.template.builder.TemplateBuilderForCsvServiceImpl;
+import com.aigreentick.services.template.util.helper.JsonHelper;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -278,6 +280,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
             List<String> validNumbers,
             Template template) {
 
+        String requestPayload = JsonHelper.serialize(request);
+
         log.info("Creating CSV broadcast record for {} numbers", validNumbers.size());
 
         Map<String, Object> data = new HashMap<>();
@@ -315,7 +319,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                 .scheduleAt(scheduleAt)
                 .status(initialStatus) // ← DYNAMIC STATUS
                 .numbers(String.join(",", validNumbers))
-                .source("CSV")
+                .broadcastType(BroadcastType.CSV)
+                .requests(requestPayload)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();

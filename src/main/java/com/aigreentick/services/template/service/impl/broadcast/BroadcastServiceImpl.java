@@ -20,6 +20,13 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 @Slf4j
 public class BroadcastServiceImpl {
+
+    private static final int DEFAULT_LOOKBACK = 10;
+    private static final int DEFAULT_LOOKAHEAD = 2;
+
+    private static final int MAX_LOOKBACK_MINUTES = 60;
+     private static final int MAX_LOOKHEAD_MINUTES = 10;
+
     private final BroadcastRepository broadcastRepository;
 
     /**
@@ -27,7 +34,7 @@ public class BroadcastServiceImpl {
      */
     @Transactional
     public Broadcast save(Broadcast broadcast) {
-        log.info("Saving broadcast for userId: {}, templateId: {}", 
+        log.info("Saving broadcast for userId: {}, templateId: {}",
                 broadcast.getUserId(), broadcast.getTemplateId());
         return broadcastRepository.save(broadcast);
     }
@@ -51,24 +58,6 @@ public class BroadcastServiceImpl {
     }
 
     /**
-     * Update broadcast status
-     */
-    // @Transactional
-    // public Broadcast updateStatus(Long broadcastId, Broadcast.Status newStatus) {
-    //     log.info("Updating broadcast {} status to {}", broadcastId, newStatus);
-
-        
-    //     Broadcast broadcast = getBroadcastById(broadcastId);
-    //     if (newStatus==Broadcast.Status.) {
-            
-    //     }
-    //     broadcast.setStatus();
-    //     broadcast.setUpdatedAt(LocalDateTime.now());
-        
-    //     return broadcastRepository.save(broadcast);
-    // }
-
-    /**
      * Save multiple broadcasts
      */
     @Transactional
@@ -83,11 +72,45 @@ public class BroadcastServiceImpl {
     @Transactional
     public void deleteBroadcast(Long broadcastId) {
         log.info("Soft deleting broadcast: {}", broadcastId);
-        
+
         Broadcast broadcast = getBroadcastById(broadcastId);
         broadcast.setDeletedAt(LocalDateTime.now());
         broadcast.setUpdatedAt(LocalDateTime.now());
-        
+
         broadcastRepository.save(broadcast);
     }
+
+    /**
+     * Get broadcasts ready for execution with custom time window.
+     * 
+     * @param lookbackMinutes  Minutes to look back from now
+     * @param lookaheadMinutes Minutes to look ahead from now
+     * @return List of broadcasts ready for execution
+     */
+    @Transactional(readOnly = true)
+    public List<Broadcast> getPendingScheduledBroadcasts(Integer lookbackMinutes, Integer lookaheadMinutes) {
+
+        int safeLookback = (lookbackMinutes == null || lookbackMinutes <= 0)
+                ? DEFAULT_LOOKBACK
+                : Math.min(lookbackMinutes, MAX_LOOKBACK_MINUTES);
+
+        int safeLookahead = (lookaheadMinutes == null || lookaheadMinutes <= 0)
+                ? DEFAULT_LOOKAHEAD
+                : Math.min(lookaheadMinutes, MAX_LOOKHEAD_MINUTES);
+
+        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime startWindow = now.minusMinutes(safeLookback);
+        LocalDateTime endWindow = now.plusMinutes(safeLookahead);
+
+        log.info("Fetching scheduled broadcasts between {} and {} with status='1'",
+                startWindow, endWindow);
+
+        List<Broadcast> broadcasts = broadcastRepository.findPendingScheduledBroadcasts(
+                startWindow, endWindow, "1");
+
+        log.info("Found {} pending scheduled broadcasts", broadcasts.size());
+
+        return broadcasts;
+    }
+
 }

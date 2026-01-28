@@ -18,6 +18,7 @@ import com.aigreentick.services.template.dto.request.WhatsappAccountInfoDto;
 import com.aigreentick.services.template.dto.request.template.BroadcastDispatchItemDto;
 import com.aigreentick.services.template.dto.request.template.normal.SendTemplateNormalRequestDto;
 import com.aigreentick.services.template.dto.response.template.TemplateResponseDto;
+import com.aigreentick.services.template.enums.BroadcastType;
 import com.aigreentick.services.template.enums.Platform;
 import com.aigreentick.services.template.enums.TemplateCategory;
 import com.aigreentick.services.template.exceptions.InsufficientBalanceException;
@@ -39,6 +40,7 @@ import com.aigreentick.services.template.service.impl.contact.ChatContactService
 import com.aigreentick.services.template.service.impl.contact.ContactMessagesServiceImpl;
 import com.aigreentick.services.template.service.impl.template.TemplateServiceImpl;
 import com.aigreentick.services.template.service.impl.template.builder.TemplateBuilderForNormalServiceImpl;
+import com.aigreentick.services.template.util.helper.JsonHelper;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -53,9 +55,9 @@ import lombok.extern.slf4j.Slf4j;
  * - No per-contact variable override for non-carousel
  * - Simpler variable structure
  * 
- * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast 
- *       -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages 
- *       -> Build Templates -> Dispatch Async
+ * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast
+ * -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages
+ * -> Build Templates -> Dispatch Async
  */
 @Service
 @Slf4j
@@ -143,7 +145,7 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
         log.info("Creating reports at: {}", LocalDateTime.now());
         Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
 
-         // Step 9: Create contacts and link messages (chained async - fire and forget)
+        // Step 9: Create contacts and link messages (chained async - fire and forget)
         log.info(" Starting chained async for contacts + messages ===");
         contactMessagesService.createContactsAndLinkMessagesAsync(
                 mobileToReportId,
@@ -268,6 +270,8 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
             List<String> validNumbers,
             Template template) {
 
+        String requestPayload = JsonHelper.serialize(request);
+
         log.info("Creating Normal broadcast record for {} numbers", validNumbers.size());
 
         Map<String, Object> data = new HashMap<>();
@@ -305,7 +309,8 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
                 .scheduleAt(scheduleAt)
                 .status(initialStatus)
                 .numbers(String.join(",", validNumbers))
-                .source("NORMAL")
+                .broadcastType(BroadcastType.NORMAL)
+                .requests(requestPayload)
                 .createdAt(LocalDateTime.now())
                 .updatedAt(LocalDateTime.now())
                 .build();
@@ -317,7 +322,7 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
      * Deducts amount from user balance and creates wallet transaction record.
      */
     private void deductWalletBalance(User user, BigDecimal totalDeduction, Long broadcastId) {
-        log.info("Deducting {} from userId: {} for Normal broadcastId: {}", 
+        log.info("Deducting {} from userId: {} for Normal broadcastId: {}",
                 totalDeduction, user.getId(), broadcastId);
 
         userService.deductBalance(user.getId(), totalDeduction.doubleValue());
@@ -374,7 +379,8 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
     }
 
     /**
-     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId mapping.
+     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId
+     * mapping.
      */
     private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> numbers, Long countryId) {
         Map<String, Long> mobileToContactId = new HashMap<>();
