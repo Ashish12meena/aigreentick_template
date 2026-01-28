@@ -50,9 +50,9 @@ import lombok.extern.slf4j.Slf4j;
  * Similar to SendTemplateOrchestratorServiceImpl but handles CSV-specific data
  * where each row can have unique variable values per recipient.
  * 
- * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast 
- *       -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages 
- *       -> Build Templates (with CSV variables) -> Dispatch Async
+ * Flow: Validate -> Filter Blacklist -> Check Balance -> Create Broadcast
+ * -> Deduct Wallet -> Create Reports -> Create Contacts -> Link ContactMessages
+ * -> Build Templates (with CSV variables) -> Dispatch Async
  */
 @Service
 @Slf4j
@@ -73,7 +73,6 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     private final ObjectMapper objectMapper;
     private final ContactMessagesServiceImpl contactMessagesService;
 
-
     @Value("${broadcast.batch-size:1000}")
     private int batchSize;
 
@@ -85,7 +84,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
      * Transactional to ensure atomicity of DB operations.
      * 
      * Key difference from regular broadcast: CSV contains per-recipient variables,
-     * so template building uses csvTemplateBuilder instead of regular templateBuilder.
+     * so template building uses csvTemplateBuilder instead of regular
+     * templateBuilder.
      */
     @Transactional
     public TemplateResponseDto broadcastTemplate(SendTemplateByCsvRequestDto request, Long userId) {
@@ -128,6 +128,21 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
 
         // Step 8: Deduct wallet balance and create transaction record
         deductWalletBalance(user, totalDeduction, broadcast.getId());
+
+        // Check if this is a scheduled broadcast (future execution)
+        if (broadcast.getScheduleAt() != null &&
+                broadcast.getScheduleAt().isAfter(LocalDateTime.now())) {
+
+            log.info("Broadcast {} scheduled for future execution at {}",
+                    broadcast.getId(), broadcast.getScheduleAt());
+
+            // Don't proceed with immediate dispatch - let scheduler handle it
+            return TemplateResponseDto.builder()
+                    .id(template.getId())
+                    .name(template.getName())
+                    .status("SCHEDULED")
+                    .build();
+        }
 
         // Step 9: Create report entries for tracking delivery status
         log.info("Creating reports at: {}", LocalDateTime.now());
@@ -183,7 +198,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
      * Builds WhatsApp API payloads in batches using CSV-specific template builder.
      * Each recipient gets personalized content based on their CSV row data.
      * 
-     * Memory optimization: Serializes to JSON immediately, allowing MessageRequest 
+     * Memory optimization: Serializes to JSON immediately, allowing MessageRequest
      * objects to be garbage collected after each batch.
      */
     private List<BroadcastDispatchItemDto> buildAllCsvDispatchItemsInBatches(
@@ -257,8 +272,11 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
      * Creates broadcast record with CSV-specific metadata.
      * Marks source as "CSV" to distinguish from regular broadcasts.
      */
-    private Broadcast createBroadcastRecord(SendTemplateByCsvRequestDto request, User user,
-            List<String> validNumbers, Template template) {
+    private Broadcast createBroadcastRecord(
+            SendTemplateByCsvRequestDto request,
+            User user,
+            List<String> validNumbers,
+            Template template) {
 
         log.info("Creating CSV broadcast record for {} numbers", validNumbers.size());
 
@@ -278,6 +296,14 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
             }
         }
 
+        // Determine initial status based on scheduling
+        String initialStatus;
+        if (scheduleAt != null && scheduleAt.isAfter(LocalDateTime.now())) {
+            initialStatus = "1"; // PENDING (for scheduler to pick up)
+        } else {
+            initialStatus = "2"; // PROCESSING (immediate execution)
+        }
+
         Broadcast broadcast = Broadcast.builder()
                 .userId(user.getId())
                 .templateId(template.getId())
@@ -287,7 +313,7 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
                 .data(data)
                 .total(validNumbers.size())
                 .scheduleAt(scheduleAt)
-                .status("1")
+                .status(initialStatus) // ← DYNAMIC STATUS
                 .numbers(String.join(",", validNumbers))
                 .source("CSV")
                 .createdAt(LocalDateTime.now())
@@ -358,7 +384,8 @@ public class SendTemplateByCSVOrchestratorServiceImpl {
     }
 
     /**
-     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId mapping.
+     * Ensures contacts exist for all mobile numbers and returns mobile -> contactId
+     * mapping.
      * Creates new contacts if they don't exist.
      */
     private Map<String, Long> createChatContactsAndGetIds(Long userId, List<String> numbers, Long countryId) {

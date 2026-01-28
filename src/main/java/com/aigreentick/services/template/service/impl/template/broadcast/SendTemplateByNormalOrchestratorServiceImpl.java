@@ -124,6 +124,21 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
         // Step 8: Deduct wallet balance and create transaction record
         deductWalletBalance(user, totalDeduction, broadcast.getId());
 
+        // Check if this is a scheduled broadcast (future execution)
+        if (broadcast.getScheduleAt() != null &&
+                broadcast.getScheduleAt().isAfter(LocalDateTime.now())) {
+
+            log.info("Broadcast {} scheduled for future execution at {}",
+                    broadcast.getId(), broadcast.getScheduleAt());
+
+            // Don't proceed with immediate dispatch - let scheduler handle it
+            return TemplateResponseDto.builder()
+                    .id(template.getId())
+                    .name(template.getName())
+                    .status("SCHEDULED")
+                    .build();
+        }
+
         // Step 9: Create report entries for tracking delivery status
         log.info("Creating reports at: {}", LocalDateTime.now());
         Map<String, Long> mobileToReportId = createReportsAndGetIds(user.getId(), broadcast.getId(), validNumbers);
@@ -271,6 +286,14 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
             }
         }
 
+        // Determine initial status based on scheduling
+        String initialStatus;
+        if (scheduleAt != null && scheduleAt.isAfter(LocalDateTime.now())) {
+            initialStatus = "1"; // PENDING (for scheduler to pick up)
+        } else {
+            initialStatus = "2"; // PROCESSING (immediate execution)
+        }
+
         Broadcast broadcast = Broadcast.builder()
                 .userId(user.getId())
                 .templateId(template.getId())
@@ -280,7 +303,7 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
                 .data(data)
                 .total(validNumbers.size())
                 .scheduleAt(scheduleAt)
-                .status("1")
+                .status(initialStatus)
                 .numbers(String.join(",", validNumbers))
                 .source("NORMAL")
                 .createdAt(LocalDateTime.now())

@@ -65,6 +65,8 @@ public class Broadcast {
     @Column(name = "schedule_at")
     private LocalDateTime scheduleAt;
 
+
+    //cancelled, active/pending , processed locked 
     @Column(name = "status", nullable = false,columnDefinition = "enum('0','1','2')")
     @Builder.Default
     private String status = "1";
