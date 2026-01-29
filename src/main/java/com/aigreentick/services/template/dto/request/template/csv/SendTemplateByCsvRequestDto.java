@@ -82,4 +82,8 @@ public class SendTemplateByCsvRequestDto {
      * ]
      */
     private List<CarouselCardDto> carouselCards;
+
+
+    //use by schedular
+    private Boolean isSchedulerExecution = false;
 }

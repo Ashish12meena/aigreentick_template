@@ -100,16 +100,22 @@ public class SendTemplateByNormalOrchestratorServiceImpl {
         Template template = templateService.getTemplateById(Long.valueOf(request.getTemplateId()));
         TemplateDto templateDto = templateMapper.toTemplateDto(template);
 
-        // Step 4: Get price based on template category
-        BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
-
+        
         // Step 5: Filter blacklisted numbers (mobileNumbers already String)
         List<String> validNumbers = blacklistService.filterBlockedNumbers(userId, request.getMobileNumbers());
         log.info("Filtered: {} valid out of {} total", validNumbers.size(), request.getMobileNumbers().size());
-
+        
         if (validNumbers.isEmpty()) {
             throw new IllegalArgumentException("No valid numbers after blacklist filtering");
         }
+
+        if (!request.getIsSchedulerExecution()) {
+            
+        }
+        
+        // Step 4: Get price based on template category
+        BigDecimal pricePerMessage = getPricePerMessage(userId, template.getCategory(), user);
+
 
         // Step 6: Validate user has sufficient balance
         BigDecimal totalDeduction = pricePerMessage.multiply(new BigDecimal(validNumbers.size()));

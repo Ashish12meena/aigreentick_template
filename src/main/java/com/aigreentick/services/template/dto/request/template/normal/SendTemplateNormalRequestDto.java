@@ -141,4 +141,7 @@ public class SendTemplateNormalRequestDto {
      * ]
      */
     private List<CarouselCardDto> carouselCards;
+
+    //use by schedular
+    private Boolean isSchedulerExecution = false;
 }
